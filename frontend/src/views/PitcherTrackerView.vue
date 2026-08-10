@@ -102,9 +102,9 @@ watchEffect(() => {
     </div>
 
     <div class="section">
-      <h2>Recent Starts &amp; Stuff Grade</h2>
+      <h2>Recent Appearances</h2>
       <p v-if="recentStartsMessage" class="muted">{{ recentStartsMessage }}</p>
-      <p v-if="recentStarts.length === 0" class="muted">No recent starts found.</p>
+      <p v-if="recentStarts.length === 0" class="muted">No recent appearances found.</p>
       <table v-else class="plain-table">
         <thead>
           <tr>
@@ -118,9 +118,6 @@ watchEffect(() => {
             <th>BB</th>
             <th>HBP</th>
             <th>K</th>
-            <th>Velo</th>
-            <th>Whiff%</th>
-            <th>Stuff</th>
           </tr>
         </thead>
         <tbody>
@@ -135,9 +132,6 @@ watchEffect(() => {
             <td>{{ start.walks ?? '—' }}</td>
             <td>{{ start.hitByPitch ?? '—' }}</td>
             <td>{{ start.strikeouts ?? '—' }}</td>
-            <td>{{ formatStatValue('exit_velocity', start.avg_velo) }}</td>
-            <td>{{ formatStatValue('whiff_pct', start.whiff_pct) }}</td>
-            <td>{{ start.stuff_grade ?? '—' }}</td>
           </tr>
         </tbody>
       </table>

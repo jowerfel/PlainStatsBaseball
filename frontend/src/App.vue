@@ -11,7 +11,7 @@ import { RouterLink, RouterView } from 'vue-router'
         <span class="nav-sep">|</span>
         <RouterLink to="/leaderboards/custom">Leaderboards</RouterLink>
         <span class="nav-sep">|</span>
-        <RouterLink to="/pitchers">Pitchers</RouterLink>
+        <RouterLink to="/pitchers">Following</RouterLink>
         <span class="nav-sep">|</span>
         <RouterLink to="/players/search">Players</RouterLink>
         <span class="nav-sep">|</span>

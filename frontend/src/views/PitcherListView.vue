@@ -57,6 +57,10 @@ const hitters = computed(() => followed.byRole('hitting'))
         </tr>
       </tbody>
     </table>
+
+    <p v-if="followed.players.length > 0" class="muted">
+      Player details are loading or unavailable for some players.
+    </p>
   </template>
 
   <p><RouterLink to="/players/search">Search for a player to follow &rarr;</RouterLink></p>

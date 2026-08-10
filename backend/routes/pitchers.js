@@ -94,14 +94,14 @@ router.get('/:id/recent-starts', async (req, res) => {
     ])
 
     const starts = ((gameLog?.stats?.[0]?.splits || [])
-      .filter((split) => Number(split.stat?.gamesStarted || 0) > 0)
       .slice(-8)
       .reverse()
       .map((split) => {
         const statcast = statcastByDate.get(split.date) || {}
+        const opponent = normalizeOpponent(split.opponent)
         return {
           gameDate: split.date,
-          opponent: split.opponent || split.opponent?.name || null,
+          opponent,
           inningsPitched: split.stat?.inningsPitched,
           earnedRuns: split.stat?.earnedRuns,
           runsAllowed: split.stat?.runs,
@@ -124,7 +124,7 @@ router.get('/:id/recent-starts', async (req, res) => {
       message:
         starts.length && starts.some((start) => start.pitch_count)
           ? ''
-          : 'Recent starts are shown from MLB game logs. Run the Statcast ETL to add velocity, spin, whiff rate, and Stuff Grade.',
+          : 'Recent appearances are shown from MLB game logs. Run the Statcast ETL to add velocity, spin, whiff rate, and Stuff Grade.',
     })
   } catch (err) {
     console.error('pitchers/:id/recent-starts failed:', err.message)
@@ -174,6 +174,19 @@ function closestGameOnOrAfter(games, isoDate) {
           Math.abs(new Date(b.gameDate).getTime() - target),
       )[0] || null
   )
+}
+
+function normalizeOpponent(opponent) {
+  if (!opponent) return null
+  if (typeof opponent === 'string') {
+    try {
+      const parsed = JSON.parse(opponent)
+      opponent = parsed
+    } catch (err) {
+      return opponent
+    }
+  }
+  return opponent?.name || opponent?.teamName || opponent?.triCode || String(opponent)
 }
 
 function calculateStuffGrade(statcast = {}) {
