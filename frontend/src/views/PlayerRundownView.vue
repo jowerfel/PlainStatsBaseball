@@ -72,6 +72,22 @@ function toggleFollow() {
     })
   }
 }
+
+function formatOpponent(opponent) {
+  if (!opponent) return '—'
+  if (typeof opponent === 'object') {
+    return opponent.name || opponent.teamName || opponent.triCode || String(opponent)
+  }
+  if (typeof opponent === 'string') {
+    try {
+      const parsed = JSON.parse(opponent)
+      return parsed?.name || parsed?.teamName || parsed?.triCode || opponent
+    } catch {
+      return opponent
+    }
+  }
+  return String(opponent)
+}
 </script>
 
 <template>
@@ -160,7 +176,7 @@ function toggleFollow() {
           <tbody>
             <tr v-for="(g, idx) in gameLog" :key="idx">
               <td>{{ g.date }}</td>
-              <td>{{ g.opponent?.name || '—' }}</td>
+              <td>{{ formatOpponent(g.opponent) }}</td>
               <template v-if="isPitcher">
                 <td>{{ g.stat?.inningsPitched ?? '—' }}</td>
                 <td>{{ g.stat?.hits ?? '—' }}</td>

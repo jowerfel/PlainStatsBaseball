@@ -180,13 +180,15 @@ function normalizeOpponent(opponent) {
   if (!opponent) return null
   if (typeof opponent === 'string') {
     try {
-      const parsed = JSON.parse(opponent)
-      opponent = parsed
+      opponent = JSON.parse(opponent)
     } catch (err) {
       return opponent
     }
   }
-  return opponent?.name || opponent?.teamName || opponent?.triCode || String(opponent)
+  if (typeof opponent === 'object' && opponent !== null) {
+    return opponent.name || opponent.teamName || opponent.triCode || String(opponent)
+  }
+  return String(opponent)
 }
 
 function calculateStuffGrade(statcast = {}) {

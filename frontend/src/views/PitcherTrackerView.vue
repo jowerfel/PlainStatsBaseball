@@ -64,6 +64,22 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString()
 }
 
+function formatOpponent(opponent) {
+  if (!opponent) return '—'
+  if (typeof opponent === 'object') {
+    return opponent.name || opponent.teamName || opponent.triCode || String(opponent)
+  }
+  if (typeof opponent === 'string') {
+    try {
+      const parsed = JSON.parse(opponent)
+      return parsed?.name || parsed?.teamName || parsed?.triCode || opponent
+    } catch {
+      return opponent
+    }
+  }
+  return String(opponent)
+}
+
 watchEffect(() => {
   if (props.playerId) load()
 })
@@ -123,7 +139,7 @@ watchEffect(() => {
         <tbody>
           <tr v-for="start in recentStarts" :key="start.gameDate">
             <td>{{ start.gameDate }}</td>
-            <td>{{ start.opponent || '—' }}</td>
+            <td>{{ formatOpponent(start.opponent) }}</td>
             <td>{{ start.inningsPitched || '—' }}</td>
             <td>{{ start.runsAllowed ?? '—' }}</td>
             <td>{{ start.earnedRuns ?? '—' }}</td>
