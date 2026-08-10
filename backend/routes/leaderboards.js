@@ -21,7 +21,7 @@ const router = Router()
 router.get('/', async (req, res) => {
   const season = req.query.season || new Date().getFullYear()
   const group = req.query.group === 'pitching' ? 'pitching' : 'hitting'
-  const limit = Math.min(Number(req.query.limit) || 50, 200)
+  const limit = Math.min(Number(req.query.limit) || 100, 300)
   const statKeys = (req.query.stats || '').split(',').filter(Boolean)
   const minPA = req.query.minPA ? Number(req.query.minPA) : null
   const minIP = req.query.minIP ? Number(req.query.minIP) : null

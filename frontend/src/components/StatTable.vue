@@ -9,6 +9,7 @@ const props = defineProps({
   columns: { type: Array, required: true },
   rows: { type: Array, required: true },
   caption: { type: String, default: '' },
+  maxRows: { type: Number, default: null },
 })
 
 const sortKey = ref(null)
@@ -35,6 +36,13 @@ const sortedRows = computed(() => {
     }
     return String(av ?? '').localeCompare(String(bv ?? '')) * dir
   })
+})
+
+const visibleRows = computed(() => {
+  if (props.maxRows && sortedRows.value.length > props.maxRows) {
+    return sortedRows.value.slice(0, props.maxRows)
+  }
+  return sortedRows.value
 })
 
 function cellValue(row, col) {
@@ -68,7 +76,7 @@ function cellQualityClass(row, col) {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, idx) in sortedRows" :key="row.id ?? idx">
+        <tr v-for="(row, idx) in visibleRows" :key="row.id ?? idx">
           <td v-for="col in columns" :key="col.key" :class="cellQualityClass(row, col)">
             <RouterLink v-if="col.link" :to="col.link(row)">{{ cellValue(row, col) }}</RouterLink>
             <template v-else>{{ cellValue(row, col) }}</template>

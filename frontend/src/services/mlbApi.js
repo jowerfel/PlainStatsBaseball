@@ -32,7 +32,7 @@ export function getPlayerGameLog(playerId, { season, group = 'hitting' } = {}) {
   return apiGet(`/players/${playerId}/gamelog?${params.toString()}`)
 }
 
-export function getLeaderboard({ group = 'hitting', season, stats = [], minPA, minIP, limit = 50 } = {}) {
+export function getLeaderboard({ group = 'hitting', season, stats = [], minPA, minIP, limit = 300 } = {}) {
   const params = new URLSearchParams()
   params.set('group', group)
   if (season) params.set('season', season)

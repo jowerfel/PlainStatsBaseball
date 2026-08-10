@@ -24,7 +24,7 @@ const columns = computed(() => [
 ])
 
 const tableRows = computed(() =>
-  rows.value.slice(0, showCount.value).map((r) => ({
+  rows.value.map((r) => ({
     id: r.playerId,
     playerName: r.playerName,
     teamName: r.teamName,
@@ -37,7 +37,7 @@ async function load() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const data = await getLeaderboard({ group, stats: [props.statKey], limit: 100 })
+    const data = await getLeaderboard({ group, stats: [props.statKey], limit: 200 })
     rows.value = data.rows || []
   } catch (err) {
     errorMsg.value = err.message || 'Could not load the leaderboard.'
@@ -65,7 +65,8 @@ watchEffect(() => {
           v-else
           :columns="columns"
           :rows="tableRows"
-          :caption="`Top ${tableRows.length} by ${def.simpleName}, current season`"
+          :maxRows="showCount"
+          :caption="`Top ${Math.min(tableRows.length, showCount)} by ${def.simpleName}, current season`"
         />
 
         <p v-if="!loading && !errorMsg && rows.length > showCount">

@@ -143,18 +143,36 @@ function toggleFollow() {
             <tr>
               <th>Date</th>
               <th>Opponent</th>
-              <th v-for="col in fullStatColumns.slice(0, 6)" :key="col.key">
-                <StatTooltip :stat-key="col.key" />
-              </th>
+              <template v-if="isPitcher">
+                <th>IP</th>
+                <th>H</th>
+                <th>R</th>
+                <th>BB</th>
+                <th>K</th>
+              </template>
+              <template v-else>
+                <th v-for="col in fullStatColumns.slice(0, 6)" :key="col.key">
+                  <StatTooltip :stat-key="col.key" />
+                </th>
+              </template>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(g, idx) in gameLog" :key="idx">
               <td>{{ g.date }}</td>
               <td>{{ g.opponent?.name || '—' }}</td>
-              <td v-for="col in fullStatColumns.slice(0, 6)" :key="col.key">
-                {{ g.stat?.[col.key] ?? '—' }}
-              </td>
+              <template v-if="isPitcher">
+                <td>{{ g.stat?.inningsPitched ?? '—' }}</td>
+                <td>{{ g.stat?.hits ?? '—' }}</td>
+                <td>{{ g.stat?.runs ?? '—' }}</td>
+                <td>{{ g.stat?.baseOnBalls ?? '—' }}</td>
+                <td>{{ g.stat?.strikeOuts ?? '—' }}</td>
+              </template>
+              <template v-else>
+                <td v-for="col in fullStatColumns.slice(0, 6)" :key="col.key">
+                  {{ g.stat?.[col.key] ?? '—' }}
+                </td>
+              </template>
             </tr>
           </tbody>
         </table>

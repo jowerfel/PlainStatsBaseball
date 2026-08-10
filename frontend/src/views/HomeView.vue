@@ -40,7 +40,7 @@ const popularPitching = getStatsByGroup('pitching').slice(0, 5)
       <h3>More</h3>
       <ul class="text-links-list">
         <li><RouterLink to="/leaderboards/custom">Build a custom leaderboard</RouterLink></li>
-        <li><RouterLink to="/pitchers">Follow players</RouterLink></li>
+        <li><RouterLink to="/pitchers">Following</RouterLink></li>
         <li><RouterLink to="/live">Live games</RouterLink></li>
         <li><RouterLink to="/about">About this site</RouterLink></li>
       </ul>

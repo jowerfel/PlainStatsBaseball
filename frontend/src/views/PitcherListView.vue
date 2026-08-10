@@ -8,8 +8,8 @@ const hitters = computed(() => followed.byRole('hitting'))
 </script>
 
 <template>
-  <h1>Followed Players</h1>
-  <p class="subtitle">Pitchers and hitters you're following, saved on this device.</p>
+  <h1>Following</h1>
+  <p class="subtitle">Players you're following, saved on this device.</p>
 
   <p v-if="followed.players.length === 0" class="muted">
     You're not following anyone yet. Visit a player page and click Follow to add them here.

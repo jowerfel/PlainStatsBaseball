@@ -111,9 +111,13 @@ watchEffect(() => {
             <th>Date</th>
             <th>Opp</th>
             <th>IP</th>
+            <th>R</th>
             <th>ER</th>
-            <th>K</th>
+            <th>H</th>
+            <th>HR</th>
             <th>BB</th>
+            <th>HBP</th>
+            <th>K</th>
             <th>Velo</th>
             <th>Whiff%</th>
             <th>Stuff</th>
@@ -122,13 +126,17 @@ watchEffect(() => {
         <tbody>
           <tr v-for="start in recentStarts" :key="start.gameDate">
             <td>{{ start.gameDate }}</td>
-            <td>{{ start.opponent?.name || '—' }}</td>
+            <td>{{ start.opponent || '—' }}</td>
             <td>{{ start.inningsPitched || '—' }}</td>
+            <td>{{ start.runsAllowed ?? '—' }}</td>
             <td>{{ start.earnedRuns ?? '—' }}</td>
-            <td>{{ start.strikeouts ?? '—' }}</td>
+            <td>{{ start.hitsAllowed ?? '—' }}</td>
+            <td>{{ start.homeRunsAllowed ?? '—' }}</td>
             <td>{{ start.walks ?? '—' }}</td>
+            <td>{{ start.hitByPitch ?? '—' }}</td>
+            <td>{{ start.strikeouts ?? '—' }}</td>
             <td>{{ formatStatValue('exit_velocity', start.avg_velo) }}</td>
-            <td>{{ formatStatValue('barrel_pct', start.whiff_pct) }}</td>
+            <td>{{ formatStatValue('whiff_pct', start.whiff_pct) }}</td>
             <td>{{ start.stuff_grade ?? '—' }}</td>
           </tr>
         </tbody>

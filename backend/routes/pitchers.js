@@ -101,11 +101,15 @@ router.get('/:id/recent-starts', async (req, res) => {
         const statcast = statcastByDate.get(split.date) || {}
         return {
           gameDate: split.date,
-          opponent: split.opponent || null,
+          opponent: split.opponent || split.opponent?.name || null,
           inningsPitched: split.stat?.inningsPitched,
           earnedRuns: split.stat?.earnedRuns,
-          strikeouts: split.stat?.strikeOuts,
+          runsAllowed: split.stat?.runs,
+          hitsAllowed: split.stat?.hits,
+          homeRunsAllowed: split.stat?.homeRuns,
           walks: split.stat?.baseOnBalls,
+          hitByPitch: split.stat?.hitBatsmen ?? split.stat?.hitByPitch,
+          strikeouts: split.stat?.strikeOuts,
           avg_velo: statcast.avg_velo ?? null,
           avg_spin_rate: statcast.avg_spin_rate ?? null,
           whiff_pct: statcast.whiff_pct ?? null,
