@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getStandings, getHealth } from '@/services/mlbApi.js'
+import StatTooltip from '@/components/StatTooltip.vue'
 
 const season = ref(new Date().getFullYear())
 const records = ref([])

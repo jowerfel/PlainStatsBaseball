@@ -3,6 +3,7 @@ import { ref, watchEffect } from 'vue'
 import { getPlayer, getPitcherNextStart, getPitcherRecentStarts } from '@/services/mlbApi.js'
 import { useFollowedPlayersStore } from '@/store/followedPlayers.js'
 import { formatStatValue } from '@/data/statDictionary.js'
+import StatTooltip from '@/components/StatTooltip.vue'
 
 const props = defineProps({
   playerId: { type: String, required: true },
@@ -126,14 +127,14 @@ watchEffect(() => {
           <tr>
             <th>Date</th>
             <th>Opp</th>
-            <th>IP</th>
-            <th>R</th>
-            <th>ER</th>
-            <th>H</th>
-            <th>HR</th>
-            <th>BB</th>
-            <th>HBP</th>
-            <th>K</th>
+            <th><StatTooltip stat-key="inningsPitched" label="IP" /></th>
+            <th><StatTooltip stat-key="runsAllowed" label="R" /></th>
+            <th><StatTooltip stat-key="earnedRuns" label="ER" /></th>
+            <th><StatTooltip stat-key="hitsAllowed" label="H" /></th>
+            <th><StatTooltip stat-key="homeRunsAllowed" label="HR" /></th>
+            <th><StatTooltip stat-key="baseOnBallsPitching" label="BB" /></th>
+            <th><StatTooltip stat-key="hitByPitch" label="HBP" /></th>
+            <th><StatTooltip stat-key="strikeOuts" label="K" /></th>
           </tr>
         </thead>
         <tbody>

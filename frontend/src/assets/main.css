@@ -258,16 +258,20 @@ button:hover, .btn:hover {
 .stat-tooltip-bubble {
   display: none;
   position: absolute;
-  bottom: 100%;
+  bottom: calc(100% + 8px);
   left: 0;
   z-index: 10;
-  width: 220px;
+  min-width: max-content;
+  max-width: 320px;
+  width: auto;
   background: #ffffe0;
   border: 1px solid #999;
-  padding: 6px;
+  padding: 8px 10px;
   font-size: 12px;
   line-height: 1.4;
+  white-space: normal;
   color: #000;
+  box-sizing: border-box;
 }
 
 .stat-tooltip-wrap:hover .stat-tooltip-bubble,

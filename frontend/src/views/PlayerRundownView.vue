@@ -186,11 +186,11 @@ function formatOpponent(opponent) {
               <th>Date</th>
               <th>Opponent</th>
               <template v-if="isPitcher">
-                <th>IP</th>
-                <th>H</th>
-                <th>R</th>
-                <th>BB</th>
-                <th>K</th>
+                <th><StatTooltip stat-key="inningsPitched" label="IP" /></th>
+                <th><StatTooltip stat-key="hitsAllowed" label="H" /></th>
+                <th><StatTooltip stat-key="runsAllowed" label="R" /></th>
+                <th><StatTooltip stat-key="baseOnBallsPitching" label="BB" /></th>
+                <th><StatTooltip stat-key="strikeOuts" label="K" /></th>
               </template>
               <template v-else>
                 <th v-for="col in fullStatColumns.slice(0, 6)" :key="col.key">
