@@ -121,12 +121,12 @@ onMounted(load)
           <th>Score</th>
           <th>Status</th>
           <th>Venue</th>
+          <th>Start</th>
           <th>Pitchers</th>
-          <th>Matchup</th>
           <th>Count</th>
           <th>Latest</th>
+          <th>Status</th>
           <th>Start</th>
-          <th>Linescore</th>
         </tr>
       </thead>
       <tbody>
