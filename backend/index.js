@@ -23,6 +23,8 @@ app.use('/api/pitchers', pitchersRouter)
 app.use('/api/live', liveRouter)
 app.use('/api/standings', standingsRouter)
 
+console.log('Mounted API routes: /api/players, /api/leaderboard, /api/pitchers, /api/live, /api/standings')
+
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' })
 })

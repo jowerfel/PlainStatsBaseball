@@ -19,8 +19,10 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 - Followed pitchers and hitters (localStorage)
 - Pitcher tracker with probable-starter lookup, fallback next-start estimate, and recent
   starts from MLB game logs
-- Live games tab with score, status, probable pitchers, current matchup, count, and latest
-  play for in-progress games
+- Live games tab with score, status, probable pitchers, current matchup, count, linescore,
+  and venue/start-time details
+- Standings tab with division-by-division team records, win percentage, games back, streak,
+  last 10, and runs scored/allowed
 - Flat, Craigslist-style UI throughout, exactly per the original design spec
 
 ## Data notes
@@ -58,3 +60,9 @@ pybaseball as its own reference implementation.
 
 - Statcast backfill depth (current season vs. multi-year)
 - Final hosting for the persistent SQLite file + nightly cron
+
+## Troubleshooting
+
+- If the standings page returns "Not found" or the live tab never finishes loading, restart the backend server so the latest route code is active.
+- Test the backend directly at `http://localhost:3001/api/live` and `http://localhost:3001/api/standings`.
+- The backend now logs the mounted API routes on startup, so you can confirm the running process has `/api/standings` enabled.

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import { getLiveGames } from '@/services/mlbApi.js'
+import { getLiveGames, getHealth } from '@/services/mlbApi.js'
 
 const games = ref([])
 const date = ref(new Date().toISOString().slice(0, 10))
@@ -8,6 +8,7 @@ const filterState = ref('all')
 const loading = ref(false)
 const errorMsg = ref('')
 const lastLoaded = ref('')
+const backendHealthy = ref(true)
 
 const filteredGames = computed(() =>
   games.value.filter((game) => {
@@ -35,11 +36,14 @@ function formatStartTime(game) {
 async function load() {
   loading.value = true
   errorMsg.value = ''
+  backendHealthy.value = true
   try {
+    await getHealth()
     const data = await getLiveGames(date.value)
     games.value = data.games || []
     lastLoaded.value = new Date().toLocaleTimeString()
   } catch (err) {
+    backendHealthy.value = false
     errorMsg.value = err.message || 'Could not load live games.'
     games.value = []
   } finally {
@@ -103,7 +107,10 @@ onMounted(load)
   </form>
 
   <p v-if="loading" class="muted">Loading live games&hellip;</p>
-  <p v-else-if="errorMsg" class="error-text">{{ errorMsg }}</p>
+  <p v-else-if="errorMsg" class="error-text">
+    {{ errorMsg }}
+    <template v-if="!backendHealthy"> Try restarting the backend and reloading the page.</template>
+  </p>
   <p v-else-if="games.length === 0" class="muted">No MLB games found for this date.</p>
 
   <div v-else class="table-scroll section">

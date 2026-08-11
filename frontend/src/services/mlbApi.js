@@ -60,3 +60,7 @@ export function getStandings(season) {
   const q = season ? `?season=${encodeURIComponent(season)}` : ''
   return apiGet(`/standings${q}`)
 }
+
+export function getHealth() {
+  return apiGet('/health')
+}

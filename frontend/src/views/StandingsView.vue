@@ -1,21 +1,25 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getStandings } from '@/services/mlbApi.js'
+import { getStandings, getHealth } from '@/services/mlbApi.js'
 
 const season = ref(new Date().getFullYear())
 const records = ref([])
 const loading = ref(false)
 const errorMsg = ref('')
 const lastLoaded = ref('')
+const backendHealthy = ref(true)
 
 async function load() {
   loading.value = true
   errorMsg.value = ''
+  backendHealthy.value = true
   try {
+    await getHealth()
     const data = await getStandings(season.value)
     records.value = data.records || []
     lastLoaded.value = new Date().toLocaleTimeString()
   } catch (err) {
+    backendHealthy.value = false
     errorMsg.value = err.message || 'Could not load standings.'
     records.value = []
   } finally {
@@ -42,7 +46,10 @@ onMounted(load)
   </form>
 
   <p v-if="loading" class="muted">Loading standings&hellip;</p>
-  <p v-else-if="errorMsg" class="error-text">{{ errorMsg }}</p>
+  <p v-else-if="errorMsg" class="error-text">
+    {{ errorMsg }}
+    <template v-if="!backendHealthy"> Try restarting the backend and reloading the page.</template>
+  </p>
 
   <div v-else-if="records.length === 0" class="muted">No standings data available.</div>
 
