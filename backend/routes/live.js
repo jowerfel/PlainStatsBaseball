@@ -57,16 +57,33 @@ function summarizeGame(game, feed) {
     gameDate: game.gameDate,
     status: game.status,
     venue: game.venue,
+    gameType: game.gameType,
     teams: {
       away: {
         team: game.teams?.away?.team,
         score: game.teams?.away?.score ?? linescore.teams?.away?.runs ?? null,
         probablePitcher: probablePitchers.away,
+        record: game.teams?.away?.team?.leagueRecord || null,
       },
       home: {
         team: game.teams?.home?.team,
         score: game.teams?.home?.score ?? linescore.teams?.home?.runs ?? null,
         probablePitcher: probablePitchers.home,
+        record: game.teams?.home?.team?.leagueRecord || null,
+      },
+    },
+    startTime: game.gameDate,
+    venueName: game.venue?.name || null,
+    linescore: {
+      away: {
+        runs: linescore.teams?.away?.runs ?? null,
+        hits: linescore.teams?.away?.hits ?? null,
+        errors: linescore.teams?.away?.errors ?? null,
+      },
+      home: {
+        runs: linescore.teams?.home?.runs ?? null,
+        hits: linescore.teams?.home?.hits ?? null,
+        errors: linescore.teams?.home?.errors ?? null,
       },
     },
     inning: {
