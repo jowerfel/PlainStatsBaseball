@@ -1,12 +1,6 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
-import {
-  getHitterStatcastSummary,
-  getPitcherStatcastSummary,
-  getSeasonStatMap,
-  getStatcastStatus,
-} from '../statcastStore.js'
 
 const router = Router()
 
@@ -77,7 +71,6 @@ router.get('/:id', async (req, res) => {
       player,
       hittingSeasonStats: hittingStats,
       pitchingSeasonStats: pitchingStats,
-      statcastStatus: getStatcastStatus(),
     })
   } catch (err) {
     console.error('players/:id failed:', err.message)
@@ -114,16 +107,9 @@ function extractSeasonSplit(seasonResponse) {
 function mergeDerivedStats(stats, group, personId, season) {
   if (!stats) return null
   const merged = { ...stats }
-  const seasonStatMap = getSeasonStatMap([personId], Number(season), group).get(String(personId)) || {}
-  Object.assign(merged, seasonStatMap)
 
   if (group === 'hitting') {
-    const statcast = getHitterStatcastSummary(personId, season)
-    if (statcast) {
-      if (statcast.xwoba !== null) merged.xwoba = statcast.xwoba
-      if (statcast.exit_velocity !== null) merged.exit_velocity = statcast.exit_velocity
-      if (statcast.barrel_pct !== null) merged.barrel_pct = statcast.barrel_pct
-    }
+    // plain MLB API mode only
   } else {
     const battersFaced = Number(merged.battersFaced || 0)
     if (battersFaced > 0) {
@@ -132,13 +118,6 @@ function mergeDerivedStats(stats, group, personId, season) {
     }
     merged.baseOnBallsPitching = merged.baseOnBalls
     merged.war_pitching = merged.war
-
-    const statcast = getPitcherStatcastSummary(personId, season)
-    if (statcast) {
-      if (statcast.spin_rate !== null) merged.spin_rate = statcast.spin_rate
-      if (statcast.avg_velo !== null) merged.avg_velo = statcast.avg_velo
-      if (statcast.whiff_pct !== null) merged.whiff_pct = statcast.whiff_pct
-    }
   }
 
   return merged

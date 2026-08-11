@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watchEffect } from 'vue'
+import { useRoute } from 'vue-router'
 import { getPlayer, getPlayerGameLog } from '@/services/mlbApi.js'
 import { getStatsByGroup, statDictionary } from '@/data/statDictionary.js'
 import { useFollowedPlayersStore } from '@/store/followedPlayers.js'
@@ -10,6 +11,7 @@ const props = defineProps({
   playerId: { type: String, required: true },
 })
 
+const route = useRoute()
 const player = ref(null)
 const hittingStats = ref(null)
 const pitchingStats = ref(null)
@@ -22,6 +24,11 @@ const isPitcher = computed(() => {
   const code = player.value?.primaryPosition?.code
   return code === '1'
 })
+
+const selectedSeason = computed(() =>
+  route.query.season ? String(route.query.season) : String(new Date().getFullYear()),
+)
+const isCareer = computed(() => selectedSeason.value === 'career')
 
 const primaryGroup = computed(() => (isPitcher.value ? 'pitching' : 'hitting'))
 const primaryStats = computed(() => (isPitcher.value ? pitchingStats.value : hittingStats.value))
@@ -39,14 +46,22 @@ async function load() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const data = await getPlayer(props.playerId)
+    const seasonQuery = isCareer.value ? 'career' : selectedSeason.value
+    const data = await getPlayer(props.playerId, seasonQuery)
     player.value = data.player
     hittingStats.value = data.hittingSeasonStats
     pitchingStats.value = data.pitchingSeasonStats
 
-    const group = data.player?.primaryPosition?.code === '1' ? 'pitching' : 'hitting'
-    const logData = await getPlayerGameLog(props.playerId, { group })
-    gameLog.value = logData.games || []
+    if (!isCareer.value) {
+      const group = data.player?.primaryPosition?.code === '1' ? 'pitching' : 'hitting'
+      const logData = await getPlayerGameLog(props.playerId, {
+        season: selectedSeason.value,
+        group,
+      })
+      gameLog.value = logData.games || []
+    } else {
+      gameLog.value = []
+    }
   } catch (err) {
     errorMsg.value = err.message || 'Could not load this player.'
   } finally {
@@ -107,9 +122,20 @@ function formatOpponent(opponent) {
         {{ followed.isFollowing(playerId) ? 'Unfollow' : `Follow ${isPitcher ? 'pitcher' : 'hitter'}` }}
       </button>
     </p>
+    <p class="muted">
+      <RouterLink
+        v-if="!isCareer"
+        :to="{ path: route.path, query: { ...route.query, season: 'career' } }"
+      >
+        View career stats
+      </RouterLink>
+      <RouterLink v-else :to="{ path: route.path, query: {} }">
+        View this season's stats
+      </RouterLink>
+    </p>
 
     <div class="section">
-      <h2>This Season At A Glance</h2>
+      <h2>{{ isCareer ? 'Career' : 'This season' }} At A Glance</h2>
       <p v-if="!primaryStats" class="muted">No season stats available yet.</p>
       <div v-else style="display: flex; gap: 20px; flex-wrap: wrap;">
         <StatBadge
@@ -150,7 +176,7 @@ function formatOpponent(opponent) {
       </table>
     </div>
 
-    <div class="section">
+    <div class="section" v-if="!isCareer">
       <h2>Game Log (last {{ gameLog.length }})</h2>
       <p v-if="gameLog.length === 0" class="muted">No recent games found.</p>
       <div v-else class="table-scroll">

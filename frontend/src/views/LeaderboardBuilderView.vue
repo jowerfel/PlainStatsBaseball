@@ -14,7 +14,12 @@ const selectedStats = ref(
 )
 const minPA = ref(route.query.minPA || '')
 const minIP = ref(route.query.minIP || '')
-const season = ref(route.query.season || new Date().getFullYear())
+const seasonType = ref(route.query.season === 'career' ? 'career' : 'season')
+const season = ref(
+  route.query.season && String(route.query.season) !== 'career'
+    ? String(route.query.season)
+    : String(new Date().getFullYear()),
+)
 
 const availableStats = computed(() => getStatsByGroup(group.value))
 
@@ -24,9 +29,6 @@ const errorMsg = ref('')
 const hasSearched = ref(false)
 const copyMsg = ref('')
 
-// Statcast-derived stats show values when backend/db/plainstats.sqlite has been populated
-// by the ETL. Before that, they still appear so shared leaderboards do not break.
-const statcastOnlyKeys = ['xwoba', 'barrel_pct', 'exit_velocity', 'spin_rate', 'k_pct', 'bb_pct']
 
 function toggleStat(key) {
   const idx = selectedStats.value.indexOf(key)
@@ -58,13 +60,14 @@ async function runSearch() {
   hasSearched.value = true
 
   // Reflect filters in the URL so the leaderboard is shareable (spec 5.1)
+  const seasonValue = seasonType.value === 'career' ? 'career' : season.value
   router.replace({
     query: {
       group: group.value,
       stats: selectedStats.value.join(','),
       minPA: minPA.value || undefined,
       minIP: minIP.value || undefined,
-      season: season.value,
+      season: seasonValue,
     },
   })
 
@@ -72,7 +75,7 @@ async function runSearch() {
     const data = await getLeaderboard({
       group: group.value,
       stats: selectedStats.value,
-      season: season.value,
+      season: seasonValue,
       minPA: group.value === 'hitting' ? minPA.value || undefined : undefined,
       minIP: group.value === 'pitching' ? minIP.value || undefined : undefined,
       limit: 100,
@@ -124,16 +127,23 @@ if (route.query.stats) {
           @change="toggleStat(s.key)"
         />
         {{ s.simpleName }}
-        <span v-if="statcastOnlyKeys.includes(s.key)" class="muted">
-          (Statcast/derived)
-        </span>
       </label>
     </fieldset>
 
     <fieldset>
       <legend>Filters</legend>
-      <label for="season-input">Season</label>
-      <input id="season-input" v-model="season" type="number" min="1900" max="2100" />
+      <label class="checkbox-row">
+        <input type="radio" value="season" v-model="seasonType" />
+        Season
+      </label>
+      <label class="checkbox-row">
+        <input type="radio" value="career" v-model="seasonType" />
+        Career
+      </label>
+      <div v-if="seasonType === 'season'">
+        <label for="season-input">Season</label>
+        <input id="season-input" v-model.number="season" type="number" min="1900" max="2100" />
+      </div>
 
       <template v-if="group === 'hitting'">
         <label for="minpa-input">Minimum plate appearances</label>

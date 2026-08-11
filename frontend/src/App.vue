@@ -28,7 +28,7 @@ import { RouterLink, RouterView } from 'vue-router'
 
   <footer class="site-footer">
     <div class="page-wrap">
-      PlainStats — baseball stats in plain English. Data from the MLB Stats API and local Statcast ETL.
+      PlainStats — baseball stats in plain English. Data from the MLB Stats API.
       Not affiliated with MLB.
     </div>
   </footer>

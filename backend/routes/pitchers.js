@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
-import { getPitcherGameDateSummaries, getStatcastStatus } from '../statcastStore.js'
 
 const router = Router()
 
@@ -86,18 +85,16 @@ router.get('/:id/recent-starts', async (req, res) => {
   const season = req.query.season || new Date().getFullYear()
 
   try {
-    const [gameLog, statcastByDate] = await Promise.all([
-      cached(`pitcher-gamelog:${playerId}:${season}`, 5 * 60 * 1000, () =>
-        mlb.getPersonGameLog(playerId, season, 'pitching').catch(() => null),
-      ),
-      Promise.resolve(getPitcherGameDateSummaries(playerId, season)),
-    ])
+    const gameLog = await cached(
+      `pitcher-gamelog:${playerId}:${season}`,
+      5 * 60 * 1000,
+      () => mlb.getPersonGameLog(playerId, season, 'pitching').catch(() => null),
+    )
 
     const starts = ((gameLog?.stats?.[0]?.splits || [])
       .slice(-8)
       .reverse()
       .map((split) => {
-        const statcast = statcastByDate.get(split.date) || {}
         const opponent = normalizeOpponent(split.opponent)
         return {
           gameDate: split.date,
@@ -110,22 +107,10 @@ router.get('/:id/recent-starts', async (req, res) => {
           walks: split.stat?.baseOnBalls,
           hitByPitch: split.stat?.hitBatsmen ?? split.stat?.hitByPitch,
           strikeouts: split.stat?.strikeOuts,
-          avg_velo: statcast.avg_velo ?? null,
-          avg_spin_rate: statcast.avg_spin_rate ?? null,
-          whiff_pct: statcast.whiff_pct ?? null,
-          pitch_count: statcast.pitch_count ?? null,
-          stuff_grade: calculateStuffGrade(statcast),
         }
       }))
 
-    res.json({
-      starts,
-      statcastStatus: getStatcastStatus(),
-      message:
-        starts.length && starts.some((start) => start.pitch_count)
-          ? ''
-          : 'Recent appearances are shown from MLB game logs. Run the Statcast ETL to add velocity, spin, whiff rate, and Stuff Grade.',
-    })
+    res.json({ starts })
   } catch (err) {
     console.error('pitchers/:id/recent-starts failed:', err.message)
     res.status(502).json({ error: 'Could not load pitcher starts.' })
@@ -133,11 +118,10 @@ router.get('/:id/recent-starts', async (req, res) => {
 })
 
 // GET /api/pitchers/:id/summary — auto-generated template summary (spec 5.3.2)
-// Same blocker as above: depends on pitcher_starts data.
 router.get('/:id/summary', (req, res) => {
   res.status(501).json({
     error: 'not_implemented',
-    message: 'Auto-summary requires recent-starts data from the Statcast ETL pipeline.',
+    message: 'Auto-summary is not implemented.',
   })
 })
 
@@ -191,15 +175,3 @@ function normalizeOpponent(opponent) {
   return String(opponent)
 }
 
-function calculateStuffGrade(statcast = {}) {
-  const velo = Number(statcast.avg_velo)
-  const spin = Number(statcast.avg_spin_rate)
-  const whiff = Number(statcast.whiff_pct)
-  if (!Number.isFinite(velo) && !Number.isFinite(spin) && !Number.isFinite(whiff)) return null
-
-  let score = 50
-  if (Number.isFinite(velo)) score += (velo - 93) * 2
-  if (Number.isFinite(spin)) score += (spin - 2250) / 60
-  if (Number.isFinite(whiff)) score += (whiff - 25) * 0.7
-  return Math.max(20, Math.min(80, Math.round(score)))
-}

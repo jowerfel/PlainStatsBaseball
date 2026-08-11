@@ -21,8 +21,6 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
   starts from MLB game logs
 - Live games tab with score, status, probable pitchers, current matchup, count, and latest
   play for in-progress games
-- Statcast summaries from local SQLite when `backend/db/plainstats.sqlite` has been
-  populated by the ETL
 - Flat, Craigslist-style UI throughout, exactly per the original design spec
 
 ## Data notes
@@ -30,9 +28,6 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /ap
 - **Stat names** now stay as their real baseball abbreviations (`AVG`, `OBP`, `IP`,
   `WAR`, etc.) while tooltips provide the full name, a short explanation, and one extra
   reading note.
-- **Statcast-derived stats** (`xwOBA`, `Barrel%`, exit velocity, spin rate, whiff rate)
-  appear when the local Statcast ETL has populated SQLite. If the DB is missing or empty,
-  the site keeps working and shows dashes for those values.
 - **WAR** is supported through the `season_stats` SQLite table because MLB's public Stats
   API does not reliably provide one standard WAR field in normal season stat responses.
   Populate `season_stats` from your chosen WAR source and the frontend will display it.

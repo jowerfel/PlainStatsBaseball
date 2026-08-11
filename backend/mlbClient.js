@@ -49,11 +49,14 @@ export function getPersonGameLog(personId, season, group = 'hitting') {
 }
 
 export function getPersonSeasonStats(personId, season, group = 'hitting') {
-  return mlbGet(`/people/${personId}/stats`, {
-    stats: 'season',
-    season,
+  const params = {
+    stats: season === 'career' ? 'career' : 'season',
     group,
-  })
+  }
+  if (season !== 'career') {
+    params.season = season
+  }
+  return mlbGet(`/people/${personId}/stats`, params)
 }
 
 export function getSchedule({ teamId, startDate, endDate, sportId = 1 } = {}) {
@@ -85,11 +88,14 @@ export function getStandings(season, leagueId = '103,104') {
 }
 
 export function getSeasonLeaderboard({ season, group = 'hitting', sportId = 1, limit = 100 }) {
-  return mlbGet('/stats', {
-    stats: 'season',
+  const params = {
+    stats: season === 'career' ? 'career' : 'season',
     group,
-    season,
     sportId,
     limit,
-  })
+  }
+  if (season !== 'career') {
+    params.season = season
+  }
+  return mlbGet('/stats', params)
 }

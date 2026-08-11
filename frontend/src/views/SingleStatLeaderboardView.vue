@@ -37,7 +37,12 @@ async function load() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const data = await getLeaderboard({ group, stats: [props.statKey], limit: 200 })
+    const data = await getLeaderboard({
+      group,
+      stats: [props.statKey],
+      season: 'career',
+      limit: 200,
+    })
     rows.value = data.rows || []
   } catch (err) {
     errorMsg.value = err.message || 'Could not load the leaderboard.'
@@ -66,7 +71,7 @@ watchEffect(() => {
           :columns="columns"
           :rows="tableRows"
           :maxRows="showCount"
-          :caption="`Top ${Math.min(tableRows.length, showCount)} by ${def.simpleName}, current season`"
+          :caption="`Top ${Math.min(tableRows.length, showCount)} by ${def.simpleName}, career`"
         />
 
         <p v-if="!loading && !errorMsg && rows.length > showCount">

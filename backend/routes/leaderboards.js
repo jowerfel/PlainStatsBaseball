@@ -1,23 +1,14 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
-import {
-  getHitterStatcastSummaries,
-  getPitcherStatcastSummaries,
-  getSeasonStatMap,
-  getStatcastStatus,
-} from '../statcastStore.js'
 
 const router = Router()
 
 // GET /api/leaderboard?group=hitting&season=2026&stats=avg,ops&minPA=200&limit=50
 //
 // MVP note: this reads directly from the MLB Stats API's live season leaderboard
-// (spec section 8 step 5/6) rather than the SQLite `leaderboard_cache` table (section 3),
-// since Statcast-derived stats (xwOBA, Barrel%) aren't available until the Python ETL
-// pipeline (section 7 step 7) is built and backfilled. Once that exists, this route should
-// check `leaderboard_cache` first and fall back to computing from `season_stats` +
-// `statcast_pitches`, per the original spec. For now it's a thin, cached pass-through.
+// (spec section 8 step 5/6) rather than any local leaderboard cache. For now it is a
+// thin, cached pass-through from the MLB API plus optional season_stats overrides.
 router.get('/', async (req, res) => {
   const season = req.query.season || new Date().getFullYear()
   const group = req.query.group === 'pitching' ? 'pitching' : 'hitting'
@@ -43,18 +34,11 @@ router.get('/', async (req, res) => {
     }))
 
     const playerIds = rows.map((row) => row.playerId).filter(Boolean)
-    const statcastMap =
-      group === 'pitching'
-        ? getPitcherStatcastSummaries(playerIds, season)
-        : getHitterStatcastSummaries(playerIds, season)
-    const seasonStatMap = getSeasonStatMap(playerIds, Number(season), group)
 
     rows = rows.map((row) => ({
       ...row,
       stat: {
         ...row.stat,
-        ...(seasonStatMap.get(String(row.playerId)) || {}),
-        ...(statcastMap.get(String(row.playerId)) || {}),
       },
     }))
 
@@ -65,12 +49,15 @@ router.get('/', async (req, res) => {
       rows = rows.filter((r) => Number(r.stat?.inningsPitched || 0) >= minIP)
     }
 
-    // If a specific statKey was requested for sorting, sort by it (Statcast-only keys like
-    // xwoba/barrel_pct aren't present yet — see MVP note above — so sorting on those is a
-    // no-op until the ETL pipeline populates them).
+    // If a specific statKey was requested for sorting, sort by it.
     const sortKey = statKeys[0]
     if (sortKey && rows.some((r) => r.stat?.[sortKey] !== undefined)) {
-      rows.sort((a, b) => Number(b.stat?.[sortKey] || 0) - Number(a.stat?.[sortKey] || 0))
+      const ascending = ['era', 'whip', 'bb_pct'].includes(sortKey)
+      rows.sort((a, b) => {
+        const aValue = Number(a.stat?.[sortKey] ?? 0)
+        const bValue = Number(b.stat?.[sortKey] ?? 0)
+        return ascending ? aValue - bValue : bValue - aValue
+      })
     }
 
     res.json({
@@ -78,7 +65,6 @@ router.get('/', async (req, res) => {
       group,
       count: rows.length,
       rows: rows.slice(0, limit),
-      statcastStatus: getStatcastStatus(),
     })
   } catch (err) {
     console.error('leaderboard failed:', err.message)
@@ -95,6 +81,13 @@ function withDerivedStats(stat = {}, group) {
     merged.k_pct = (Number(merged.strikeOuts || 0) / battersFaced) * 100
     merged.bb_pct = (Number(merged.baseOnBalls || 0) / battersFaced) * 100
   }
+
+  // The MLB Stats API returns pitching totals as hits/homeRuns/runs for leaderboard splits.
+  // Map those values into the app's pitching stat keys so leaderboards and tables work.
+  if (merged.hits !== undefined) merged.hitsAllowed = merged.hits
+  if (merged.homeRuns !== undefined) merged.homeRunsAllowed = merged.homeRuns
+  if (merged.runs !== undefined) merged.runsAllowed = merged.runs
+
   merged.baseOnBallsPitching = merged.baseOnBalls
   merged.war_pitching = merged.war
   return merged
