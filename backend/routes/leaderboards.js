@@ -52,24 +52,6 @@ router.get('/', async (req, res) => {
       stat: withDerivedStats(split.stat, group),
     }))
 
-    // Temporary diagnostic: MLB's `stats=career` (no season) endpoint has a documented note
-    // ("if excluding season parameter to get all time leaders, include statType=... or you
-    // will likely not get any results") suggesting this mode is unreliable/incomplete. Rickey
-    // Henderson (personId 115749) — the actual career SB leader — was missing from the SB
-    // leaderboard even after raising POOL_SIZE, which should rule out a pool-size cause. This
-    // logs whether he's present in the raw pool at all, and with what SB value, so the real
-    // cause (missing from pool vs. present with wrong data vs. something else entirely) is
-    // known for certain instead of guessed at. Safe to remove once the leaderboard is fixed.
-    if (group === 'hitting') {
-      const henderson = rows.find((r) => r.playerId === 115749)
-      console.log(
-        '[diagnostic] Rickey Henderson in career hitting pool:',
-        henderson
-          ? `YES — stolenBases=${henderson.stat?.stolenBases}, hits=${henderson.stat?.hits}`
-          : `NO (pool had ${rows.length} rows)`,
-      )
-    }
-
     if (minPA !== null) {
       rows = rows.filter((r) => Number(r.stat?.plateAppearances || 0) >= minPA)
     }
@@ -97,12 +79,6 @@ router.get('/', async (req, res) => {
       poolSize: rows.length,
       count: rows.length,
       rows: rows.slice(0, limit),
-      // Temporary diagnostic — see note above where this is computed. Remove once resolved.
-      _debugHendersonInPool: group === 'hitting'
-        ? (rows.find((r) => r.playerId === 115749)
-            ? { found: true, stolenBases: rows.find((r) => r.playerId === 115749).stat?.stolenBases }
-            : { found: false })
-        : undefined,
     })
   } catch (err) {
     console.error('leaderboard failed:', err.message)
