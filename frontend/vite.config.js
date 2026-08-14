@@ -3,6 +3,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
+  // Force absolute path resolution for assets so sub-page refreshes work properly
+  base: '/', 
   plugins: [vue()],
   resolve: {
     alias: {
