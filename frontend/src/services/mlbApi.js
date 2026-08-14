@@ -2,7 +2,9 @@
 // the upstream MLB Stats API. Never call statsapi.mlb.com directly from the browser — that's
 // what the backend proxy is for (CORS, caching, combining sources later with Statcast data).
 
-const API_BASE = '/api'
+// CHANGED: Use the Vite environment variable instead of a hardcoded string.
+// We add `|| '/api'` as a safe fallback just in case the .env file isn't loaded properly.
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 async function apiGet(path) {
   const res = await fetch(`${API_BASE}${path}`)
