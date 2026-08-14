@@ -39,6 +39,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' })
 })
 
-app.listen(PORT, () => {
-  console.log(`PlainStats backend listening on http://localhost:${PORT}`)
+// Change the listen function to accept '0.0.0.0'
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`PlainStats backend listening on port ${PORT}`)
 })
