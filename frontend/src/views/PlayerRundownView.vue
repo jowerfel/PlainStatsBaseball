@@ -1,11 +1,12 @@
 <script setup>
 import { ref, computed, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
-import { getPlayer, getPlayerGameLog } from '@/services/mlbApi.js'
+import { getPlayer, getPlayerGameLog, getPlayerYearByYear } from '@/services/mlbApi.js'
 import { getStatsByGroup, statDictionary } from '@/data/statDictionary.js'
 import { useFollowedPlayersStore } from '@/store/followedPlayers.js'
 import StatBadge from '@/components/StatBadge.vue'
 import StatTooltip from '@/components/StatTooltip.vue'
+import StatTable from '@/components/StatTable.vue'
 
 const props = defineProps({
   playerId: { type: String, required: true },
@@ -16,6 +17,8 @@ const player = ref(null)
 const hittingStats = ref(null)
 const pitchingStats = ref(null)
 const gameLog = ref([])
+const yearByYear = ref([])
+const yearByYearLoading = ref(false)
 const loading = ref(true)
 const errorMsg = ref('')
 const followed = useFollowedPlayersStore()
@@ -42,6 +45,14 @@ const glanceKeys = computed(() =>
 
 const fullStatColumns = computed(() => getStatsByGroup(primaryGroup.value))
 
+// "Year" + "Team" up front, then the same stat columns used in the full stat line, so every
+// season row lines up with the badges/headers the person already knows from "At A Glance".
+const yearByYearColumns = computed(() => [
+  { key: 'season', label: 'Year', isStat: false },
+  { key: 'team', label: 'Team', isStat: false },
+  ...fullStatColumns.value,
+])
+
 async function load() {
   loading.value = true
   errorMsg.value = ''
@@ -52,8 +63,9 @@ async function load() {
     hittingStats.value = data.hittingSeasonStats
     pitchingStats.value = data.pitchingSeasonStats
 
+    const group = data.player?.primaryPosition?.code === '1' ? 'pitching' : 'hitting'
+
     if (!isCareer.value) {
-      const group = data.player?.primaryPosition?.code === '1' ? 'pitching' : 'hitting'
       const logData = await getPlayerGameLog(props.playerId, {
         season: selectedSeason.value,
         group,
@@ -62,10 +74,26 @@ async function load() {
     } else {
       gameLog.value = []
     }
+
+    await loadYearByYear(group)
   } catch (err) {
     errorMsg.value = err.message || 'Could not load this player.'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadYearByYear(group) {
+  yearByYearLoading.value = true
+  try {
+    const data = await getPlayerYearByYear(props.playerId, { group })
+    yearByYear.value = data.seasons || []
+  } catch {
+    // Non-fatal — the rest of the page (glance stats, career/season line) still works
+    // without the year-by-year breakdown, so don't blow away errorMsg for this.
+    yearByYear.value = []
+  } finally {
+    yearByYearLoading.value = false
   }
 }
 
@@ -174,6 +202,20 @@ function formatOpponent(opponent) {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="section">
+      <h2>Year by Year ({{ primaryGroup }})</h2>
+      <p v-if="yearByYearLoading" class="muted">Loading season history&hellip;</p>
+      <p v-else-if="yearByYear.length === 0" class="muted">
+        No season-by-season data available.
+      </p>
+      <StatTable
+        v-else
+        :columns="yearByYearColumns"
+        :rows="yearByYear"
+        :caption="`${player.fullName} — season by season`"
+      />
     </div>
 
     <div class="section" v-if="!isCareer">

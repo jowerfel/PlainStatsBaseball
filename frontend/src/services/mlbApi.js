@@ -32,6 +32,12 @@ export function getPlayerGameLog(playerId, { season, group = 'hitting' } = {}) {
   return apiGet(`/players/${playerId}/gamelog?${params.toString()}`)
 }
 
+export function getPlayerYearByYear(playerId, { group = 'hitting' } = {}) {
+  const params = new URLSearchParams()
+  params.set('group', group)
+  return apiGet(`/players/${playerId}/year-by-year?${params.toString()}`)
+}
+
 export function getLeaderboard({ group = 'hitting', season, stats = [], minPA, minIP, limit = 300 } = {}) {
   const params = new URLSearchParams()
   params.set('group', group)

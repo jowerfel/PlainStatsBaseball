@@ -34,7 +34,7 @@ async function runSearch() {
 
 <template>
   <h1>Player Search</h1>
-  <p class="subtitle">Find a player to see their full rundown.</p>
+  <p class="subtitle">Find any MLB player, past or present, to see their full rundown.</p>
 
   <form class="plain-form" @submit.prevent>
     <label for="player-search-input">Player name</label>
@@ -42,7 +42,7 @@ async function runSearch() {
       id="player-search-input"
       v-model="query"
       type="text"
-      placeholder="e.g. Judge"
+      placeholder="e.g. Judge, Ruth, Mays"
       autocomplete="off"
     />
   </form>
