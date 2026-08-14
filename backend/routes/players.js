@@ -55,9 +55,14 @@ router.get('/search', async (req, res) => {
       .filter((p) => (p.fullName || '').toLowerCase().includes(q))
       .sort((a, b) => a.fullName.localeCompare(b.fullName))
       .slice(0, 25)
-    res.json({ people: matches })
+    res.json({ people: matches, poolSize: byId.size })
   } catch (err) {
-    console.error('players/search failed:', err.message)
+    console.error(
+      'players/search failed:',
+      err.message,
+      err.status ? `(upstream status ${err.status})` : '',
+      err.upstreamBody ? err.upstreamBody.slice(0, 500) : '',
+    )
     res.status(502).json({ error: 'Could not reach the MLB Stats API.' })
   }
 })
@@ -136,7 +141,12 @@ router.get('/:id/year-by-year', async (req, res) => {
       .sort((a, b) => Number(a.season) - Number(b.season))
     res.json({ seasons })
   } catch (err) {
-    console.error('players/:id/year-by-year failed:', err.message)
+    console.error(
+      'players/:id/year-by-year failed:',
+      err.message,
+      err.status ? `(upstream status ${err.status})` : '',
+      err.upstreamBody ? err.upstreamBody.slice(0, 500) : '',
+    )
     res.status(502).json({ error: 'Could not reach the MLB Stats API.' })
   }
 })

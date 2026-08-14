@@ -19,6 +19,7 @@ const pitchingStats = ref(null)
 const gameLog = ref([])
 const yearByYear = ref([])
 const yearByYearLoading = ref(false)
+const yearByYearError = ref('')
 const loading = ref(true)
 const errorMsg = ref('')
 const followed = useFollowedPlayersStore()
@@ -85,13 +86,16 @@ async function load() {
 
 async function loadYearByYear(group) {
   yearByYearLoading.value = true
+  yearByYearError.value = ''
   try {
     const data = await getPlayerYearByYear(props.playerId, { group })
     yearByYear.value = data.seasons || []
-  } catch {
-    // Non-fatal — the rest of the page (glance stats, career/season line) still works
-    // without the year-by-year breakdown, so don't blow away errorMsg for this.
+  } catch (err) {
+    // Surface the real failure instead of silently showing "no data" — a request that
+    // fails (network error, 502 from our backend, etc.) looks identical to a genuinely
+    // empty result otherwise, which made this bug impossible to diagnose from the UI.
     yearByYear.value = []
+    yearByYearError.value = err.message || 'Could not load season-by-season stats.'
   } finally {
     yearByYearLoading.value = false
   }
@@ -207,6 +211,7 @@ function formatOpponent(opponent) {
     <div class="section">
       <h2>Year by Year ({{ primaryGroup }})</h2>
       <p v-if="yearByYearLoading" class="muted">Loading season history&hellip;</p>
+      <p v-else-if="yearByYearError" class="error-text">{{ yearByYearError }}</p>
       <p v-else-if="yearByYear.length === 0" class="muted">
         No season-by-season data available.
       </p>

@@ -1,5 +1,7 @@
 import express from 'express'
 import cors from 'cors'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 import playersRouter from './routes/players.js'
 import leaderboardsRouter from './routes/leaderboards.js'
@@ -9,8 +11,12 @@ import standingsRouter from './routes/standings.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
-const path = require('path');
 
+// ES modules don't have __dirname/__filename built in (those are CommonJS globals) —
+// this is the standard way to reconstruct them: derive the current file's path from
+// import.meta.url, then take its directory.
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 app.use(cors())
 app.use(express.json())
