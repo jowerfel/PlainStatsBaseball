@@ -5,17 +5,28 @@ import StatTooltip from './StatTooltip.vue'
 
 // columns: [{ key: 'playerName', label: 'Player', isStat: false, link: (row) => '/players/1' }, ...]
 // rows: array of plain objects with flat keys matching column.key
+// onHeaderClick (optional): if provided, header clicks call this instead of doing the
+// built-in client-side sort. Use this when `rows` is already a server-picked slice (e.g. a
+// leaderboard's top-N by some stat) where re-sorting only the visible rows client-side would
+// silently misrepresent the true ranking for a different stat — see LeaderboardBuilderView.
 const props = defineProps({
   columns: { type: Array, required: true },
   rows: { type: Array, required: true },
   caption: { type: String, default: '' },
   maxRows: { type: Number, default: null },
+  onHeaderClick: { type: Function, default: null },
+  activeSortKey: { type: String, default: null },
+  activeSortDir: { type: String, default: 'desc' },
 })
 
 const sortKey = ref(null)
 const sortDir = ref('desc')
 
-function onHeaderClick(col) {
+function handleHeaderClick(col) {
+  if (props.onHeaderClick) {
+    props.onHeaderClick(col)
+    return
+  }
   if (sortKey.value === col.key) {
     sortDir.value = sortDir.value === 'desc' ? 'asc' : 'desc'
   } else {
@@ -24,8 +35,13 @@ function onHeaderClick(col) {
   }
 }
 
+const effectiveSortKey = computed(() => (props.onHeaderClick ? props.activeSortKey : sortKey.value))
+const effectiveSortDir = computed(() => (props.onHeaderClick ? props.activeSortDir : sortDir.value))
+
 const sortedRows = computed(() => {
-  if (!sortKey.value) return props.rows
+  // When a parent owns sorting (onHeaderClick provided), `rows` arrives pre-sorted from the
+  // server — don't re-sort client-side, just display in the order given.
+  if (props.onHeaderClick || !sortKey.value) return props.rows
   const key = sortKey.value
   const dir = sortDir.value === 'asc' ? 1 : -1
   return [...props.rows].sort((a, b) => {
@@ -67,11 +83,11 @@ function cellQualityClass(row, col) {
             v-for="col in columns"
             :key="col.key"
             class="sortable"
-            @click="onHeaderClick(col)"
+            @click="handleHeaderClick(col)"
           >
             <StatTooltip v-if="col.isStat && statDictionary[col.key]" :stat-key="col.key" />
             <span v-else>{{ col.label }}</span>
-            <span v-if="sortKey === col.key">{{ sortDir === 'asc' ? ' \u25B2' : ' \u25BC' }}</span>
+            <span v-if="effectiveSortKey === col.key">{{ effectiveSortDir === 'asc' ? ' \u25B2' : ' \u25BC' }}</span>
           </th>
         </tr>
       </thead>

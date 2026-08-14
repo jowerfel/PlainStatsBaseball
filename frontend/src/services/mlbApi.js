@@ -2,8 +2,6 @@
 // the upstream MLB Stats API. Never call statsapi.mlb.com directly from the browser — that's
 // what the backend proxy is for (CORS, caching, combining sources later with Statcast data).
 
-// CHANGED: Use the Vite environment variable instead of a hardcoded string.
-// We add `|| '/api'` as a safe fallback just in case the .env file isn't loaded properly.
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 async function apiGet(path) {
@@ -40,11 +38,12 @@ export function getPlayerYearByYear(playerId, { group = 'hitting' } = {}) {
   return apiGet(`/players/${playerId}/year-by-year?${params.toString()}`)
 }
 
-export function getLeaderboard({ group = 'hitting', season, stats = [], minPA, minIP, limit = 300 } = {}) {
+export function getLeaderboard({ group = 'hitting', season, stats = [], sortStat, minPA, minIP, limit = 100 } = {}) {
   const params = new URLSearchParams()
   params.set('group', group)
   if (season) params.set('season', season)
   if (stats.length) params.set('stats', stats.join(','))
+  if (sortStat) params.set('sortStat', sortStat)
   if (minPA) params.set('minPA', minPA)
   if (minIP) params.set('minIP', minIP)
   params.set('limit', limit)

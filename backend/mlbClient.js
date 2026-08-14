@@ -38,17 +38,19 @@ export function getAllActivePlayers(season, sportId = 1) {
 
 // Historical player search support.
 //
-// There is still no real `/people/search?names=` endpoint on the live API (checked again —
-// only `people` and `person`, which both require IDs you already have). The `sports/{id}/players`
-// endpoint above DOES accept a historical `season` and returns every player who appeared that
-// year (not just currently-active players) — that's how community tools resolve old names to
-// IDs (e.g. looking up a 2008 World Series roster). So "search all of history" means sweeping
-// this endpoint across a set of season snapshots and de-duping by person id. We don't sweep
-// every MLB season back to 1876 on every request (100+ upstream calls); instead the route layer
-// picks a manageable, cached set of snapshot years — see routes/players.js for the year list
-// and caching strategy.
-export function getPlayersForSeason(season, sportId = 1) {
-  return mlbGet(`/sports/${sportId}/players`, { season })
+// The `sports/{sportId}/players?season=YYYY` endpoint above is season-scoped to whoever had
+// a roster spot that year, which turned out to be unreliable for reaching deep into history
+// (retired/pre-integration/dead-ball-era players routinely fell through a fixed sweep of
+// sample years). The far more reliable primitive, confirmed by the leaderboard feature
+// already working correctly for names like Barry Bonds: `/stats?stats=career&group=hitting`
+// with NO season parameter returns MLB's actual all-time career leaderboard (this is the same
+// data backing mlb.com/stats/all-time-totals) — hundreds of players per call, sorted by
+// whatever counting stat the API defaults to, each row carrying player id + fullName. Pulling
+// this for a handful of different counting stats (hits, home runs, strikeouts, wins, etc.)
+// surfaces a wide, name-diverse slice of MLB history in a few cheap, cacheable calls — see
+// routes/players.js for exactly which stats are swept and how they're merged.
+export function getCareerLeaders({ group = 'hitting', sportId = 1, limit = 3000 } = {}) {
+  return mlbGet('/stats', { stats: 'career', group, sportId, limit })
 }
 
 export function getPerson(personId, hydrate = 'currentTeam') {
@@ -112,9 +114,9 @@ export function getStandings(season, leagueId = '103,104') {
   return mlbGet('/standings', { leagueId, season })
 }
 
-export function getSeasonLeaderboard({ season, group = 'hitting', sportId = 1, limit = 100 }) {
+export function getSeasonLeaderboard({ season, group = 'hitting', sportId = 1, limit = 100, statType } = {}) {
   const params = {
-    stats: season === 'career' ? 'career' : 'season',
+    stats: season === 'career' ? 'career' : (statType || 'season'),
     group,
     sportId,
     limit,

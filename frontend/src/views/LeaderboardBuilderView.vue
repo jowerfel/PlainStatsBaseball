@@ -28,6 +28,8 @@ const loading = ref(false)
 const errorMsg = ref('')
 const hasSearched = ref(false)
 const copyMsg = ref('')
+const activeSortStat = ref(selectedStats.value[0] || null)
+const activeSortDir = ref('desc')
 
 
 function toggleStat(key) {
@@ -54,10 +56,34 @@ const tableRows = computed(() =>
   })),
 )
 
+// StatTable's own header click normally does a purely client-side re-sort, which is only
+// correct if the rows it's holding are the full/true population for whatever column got
+// clicked. Here they're NOT — `rows` is a server-side top-N slice already sorted by one
+// particular stat, so re-sorting a different stat column client-side would just reorder
+// that same incomplete slice instead of showing the actual leaders for that stat (this was
+// the leaderboard sorting bug). Re-running the search against the backend with the newly
+// clicked stat as sortStat gets the real top-N for that stat instead.
+function onSortRequested(col) {
+  if (!col.isStat) return
+  if (activeSortStat.value === col.key) {
+    activeSortDir.value = activeSortDir.value === 'desc' ? 'asc' : 'desc'
+  } else {
+    activeSortStat.value = col.key
+    activeSortDir.value = 'desc'
+  }
+  runSearch()
+}
+
 async function runSearch() {
   loading.value = true
   errorMsg.value = ''
   hasSearched.value = true
+
+  // Keep the active sort stat valid — if it was deselected, fall back to the first checked stat.
+  if (!selectedStats.value.includes(activeSortStat.value)) {
+    activeSortStat.value = selectedStats.value[0] || null
+    activeSortDir.value = 'desc'
+  }
 
   // Reflect filters in the URL so the leaderboard is shareable (spec 5.1)
   const seasonValue = seasonType.value === 'career' ? 'career' : season.value
@@ -65,6 +91,7 @@ async function runSearch() {
     query: {
       group: group.value,
       stats: selectedStats.value.join(','),
+      sortStat: activeSortStat.value || undefined,
       minPA: minPA.value || undefined,
       minIP: minIP.value || undefined,
       season: seasonValue,
@@ -75,12 +102,16 @@ async function runSearch() {
     const data = await getLeaderboard({
       group: group.value,
       stats: selectedStats.value,
+      sortStat: activeSortStat.value,
       season: seasonValue,
       minPA: group.value === 'hitting' ? minPA.value || undefined : undefined,
       minIP: group.value === 'pitching' ? minIP.value || undefined : undefined,
       limit: 100,
     })
     rows.value = data.rows || []
+    if (activeSortDir.value === 'asc') {
+      rows.value = [...rows.value].reverse()
+    }
   } catch (err) {
     errorMsg.value = err.message || 'Could not build the leaderboard.'
   } finally {
@@ -170,6 +201,13 @@ if (route.query.stats) {
     <p v-if="loading" class="muted">Loading&hellip;</p>
     <p v-else-if="errorMsg" class="error-text">{{ errorMsg }}</p>
     <p v-else-if="selectedStats.length === 0" class="muted">Pick at least one stat above.</p>
-    <StatTable v-else :columns="columns" :rows="tableRows" />
+    <StatTable
+      v-else
+      :columns="columns"
+      :rows="tableRows"
+      :on-header-click="onSortRequested"
+      :active-sort-key="activeSortStat"
+      :active-sort-dir="activeSortDir"
+    />
   </div>
 </template>

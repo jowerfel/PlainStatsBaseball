@@ -4,53 +4,51 @@ import * as mlb from '../mlbClient.js'
 
 const router = Router()
 
-// Snapshot years swept for historical search. The `sports/1/players?season=YYYY` endpoint
-// returns every player who appeared in MLB that season (not just "currently active" players),
-// so sampling one season per era gives broad name coverage of MLB history without hammering
-// the upstream API with 100+ calls per search. A player who appeared in ANY MLB season is very
-// likely to also appear in a nearby sampled year's roster (careers span multiple years), so a
-// ~5-year stride from 1901 (AL founding) to present catches effectively all of major-league
-// history while keeping the snapshot set small and cacheable.
-function buildSearchSnapshotYears() {
-  const currentYear = new Date().getFullYear()
-  const years = []
-  for (let y = currentYear; y >= 1901; y -= 5) {
-    years.push(y)
-  }
-  if (years[years.length - 1] !== 1901) years.push(1901)
-  // Always include the current year exactly (in case the stride skipped it) and last year,
-  // so brand-new rookies show up immediately.
-  years.unshift(currentYear - 1)
-  return [...new Set(years)]
-}
-
-const SEARCH_SNAPSHOT_YEARS = buildSearchSnapshotYears()
+// Stat keys swept to build a broad historical player pool via the all-time career leaderboard
+// (see mlbClient.js getCareerLeaders). No single stat's "top N" list covers everyone — a
+// leadoff hitter with 3000 hits and zero home runs won't show up in a home-run-sorted top
+// list — so several different counting stats (offense + pitching) are pulled and merged.
+// Each is its own upstream call, independently cached, at a generous limit so the merged
+// pool is wide.
+const CAREER_SEARCH_STAT_SWEEPS = [
+  { group: 'hitting' },
+  { group: 'pitching' },
+]
 
 // GET /api/players/search?q=judge
 //
-// The MLB Stats API has no name-search endpoint (see mlbClient.js note on getPlayersForSeason).
-// This sweeps a fixed set of historical season snapshots (see buildSearchSnapshotYears above),
-// merges + de-dupes the results by person id, and filters by name server-side. Each season
-// snapshot is cached separately and long-term (season rosters, especially historical ones,
-// never change), so only the first search after a cold start pays the full fetch cost —
-// subsequent searches of any name reuse the same cached snapshots.
+// The MLB Stats API has no name-search endpoint (confirmed — see mlbClient.js). Historical
+// coverage comes from `/stats?stats=career` (no season param), which is MLB's own all-time
+// leaderboard data — the same endpoint the app's leaderboard feature already uses successfully
+// for career results. Pulling the full hitting and pitching all-time career pools (a few
+// thousand rows each, well within one request's limit) and merging + de-duping by person id
+// gives a name pool covering effectively all of MLB history in two cached upstream calls,
+// rather than the many small season-by-season roster snapshots this used to sweep.
 router.get('/search', async (req, res) => {
   const q = (req.query.q || '').trim().toLowerCase()
   if (q.length < 2) {
     return res.json({ people: [] })
   }
   try {
-    const snapshots = await Promise.all(
-      SEARCH_SNAPSHOT_YEARS.map((year) =>
-        cached(`season-players:${year}`, 24 * 60 * 60 * 1000, () =>
-          mlb.getPlayersForSeason(year).catch(() => ({ people: [] })),
+    const pools = await Promise.all(
+      CAREER_SEARCH_STAT_SWEEPS.map(({ group }) =>
+        cached(`career-leaders:${group}`, 24 * 60 * 60 * 1000, () =>
+          mlb.getCareerLeaders({ group }).catch(() => ({ stats: [] })),
         ),
       ),
     )
     const byId = new Map()
-    for (const snapshot of snapshots) {
-      for (const p of snapshot.people || []) {
-        if (!byId.has(p.id)) byId.set(p.id, p)
+    for (const pool of pools) {
+      const splits = pool.stats?.[0]?.splits || []
+      for (const split of splits) {
+        const person = split.player
+        if (person && !byId.has(person.id)) {
+          byId.set(person.id, {
+            id: person.id,
+            fullName: person.fullName,
+            primaryNumber: person.primaryNumber,
+          })
+        }
       }
     }
     const matches = [...byId.values()]
