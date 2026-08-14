@@ -4,44 +4,46 @@ import * as mlb from '../mlbClient.js'
 
 const router = Router()
 
-// Stat keys swept to build a broad historical player pool via the all-time career leaderboard
-// (see mlbClient.js getCareerLeaders). No single stat's "top N" list covers everyone — a
-// leadoff hitter with 3000 hits and zero home runs won't show up in a home-run-sorted top
-// list — so several different counting stats (offense + pitching) are pulled and merged.
-// Each is its own upstream call, independently cached, at a generous limit so the merged
-// pool is wide.
-const CAREER_SEARCH_STAT_SWEEPS = [
-  { group: 'hitting' },
-  { group: 'pitching' },
-]
-
 // GET /api/players/search?q=judge
 //
-// The MLB Stats API has no name-search endpoint (confirmed — see mlbClient.js). Historical
-// coverage comes from `/stats?stats=career` (no season param), which is MLB's own all-time
-// leaderboard data — the same endpoint the app's leaderboard feature already uses successfully
-// for career results. Pulling the full hitting and pitching all-time career pools (a few
-// thousand rows each, well within one request's limit) and merging + de-duping by person id
-// gives a name pool covering effectively all of MLB history in two cached upstream calls,
-// rather than the many small season-by-season roster snapshots this used to sweep.
+// Uses a hybrid approach:
+// 1. Caches the full active rosters for the current/previous year to guarantee current 
+//    stars aren't truncated by MLB API search limits.
+// 2. Uses the native /people/search endpoint to find historical players, bypassing 
+//    the 3000-player limit of the old career leaderboards method.
 router.get('/search', async (req, res) => {
   const q = (req.query.q || '').trim().toLowerCase()
   if (q.length < 2) {
     return res.json({ people: [] })
   }
+  
   try {
-    const pools = await Promise.all(
-      CAREER_SEARCH_STAT_SWEEPS.map(({ group }) =>
-        cached(`career-leaders:${group}`, 24 * 60 * 60 * 1000, () =>
-          mlb.getCareerLeaders({ group }).catch(() => ({ stats: [] })),
+    const currentYear = new Date().getFullYear()
+
+    // Fetch active players (guarantees Aaron Judge is found) and native search (handles historical)
+    const [rosterPools, searchData] = await Promise.all([
+      Promise.all(
+        [currentYear, currentYear - 1].map((year) =>
+          cached(`active-players:${year}`, 60 * 60 * 1000, () =>
+            mlb.getAllActivePlayers(year).catch((err) => {
+              console.error(`active-players:${year} fetch failed:`, err.message)
+              return { people: [] }
+            }),
+          ),
         ),
       ),
-    )
+      cached(`search:${q}`, 60 * 60 * 1000, async () => {
+        const response = await fetch(`https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(q)}`)
+        if (!response.ok) throw new Error(`Upstream status: ${response.status}`)
+        return response.json()
+      })
+    ])
+
     const byId = new Map()
-    for (const pool of pools) {
-      const splits = pool.stats?.[0]?.splits || []
-      for (const split of splits) {
-        const person = split.player
+
+    // 1. Add active roster players first
+    for (const pool of rosterPools) {
+      for (const person of pool.people || []) {
         if (person && !byId.has(person.id)) {
           byId.set(person.id, {
             id: person.id,
@@ -51,18 +53,30 @@ router.get('/search', async (req, res) => {
         }
       }
     }
+
+    // 2. Add historical/search endpoint players
+    for (const person of searchData.people || []) {
+      if (person && !byId.has(person.id)) {
+        byId.set(person.id, {
+          id: person.id,
+          fullName: person.fullName,
+          primaryNumber: person.primaryNumber,
+        })
+      }
+    }
+
+    // Filter, sort, and slice the combined pool
     const matches = [...byId.values()]
       .filter((p) => (p.fullName || '').toLowerCase().includes(q))
       .sort((a, b) => a.fullName.localeCompare(b.fullName))
       .slice(0, 25)
-    res.json({ people: matches, poolSize: byId.size })
+
+    res.json({
+      people: matches,
+      poolSize: byId.size,
+    })
   } catch (err) {
-    console.error(
-      'players/search failed:',
-      err.message,
-      err.status ? `(upstream status ${err.status})` : '',
-      err.upstreamBody ? err.upstreamBody.slice(0, 500) : '',
-    )
+    console.error('players/search failed:', err.message)
     res.status(502).json({ error: 'Could not reach the MLB Stats API.' })
   }
 })
@@ -115,11 +129,6 @@ router.get('/:id', async (req, res) => {
 })
 
 // GET /api/players/:id/year-by-year?group=hitting
-//
-// Returns one row per season (per team stint) of the player's career, oldest first, plus
-// the same derived stats used elsewhere so the frontend can render it with the existing
-// stat-formatting helpers. Historical players with no data for a group (e.g. a pitcher
-// with no hitting stats) just get an empty seasons array.
 router.get('/:id/year-by-year', async (req, res) => {
   const personId = req.params.id
   const group = req.query.group === 'pitching' ? 'pitching' : 'hitting'
@@ -141,12 +150,7 @@ router.get('/:id/year-by-year', async (req, res) => {
       .sort((a, b) => Number(a.season) - Number(b.season))
     res.json({ seasons })
   } catch (err) {
-    console.error(
-      'players/:id/year-by-year failed:',
-      err.message,
-      err.status ? `(upstream status ${err.status})` : '',
-      err.upstreamBody ? err.upstreamBody.slice(0, 500) : '',
-    )
+    console.error('players/:id/year-by-year failed:', err.message)
     res.status(502).json({ error: 'Could not reach the MLB Stats API.' })
   }
 })
