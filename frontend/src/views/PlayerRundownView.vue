@@ -48,10 +48,14 @@ const fullStatColumns = computed(() => getStatsByGroup(primaryGroup.value))
 
 // "Year" + "Team" up front, then the same stat columns used in the full stat line, so every
 // season row lines up with the badges/headers the person already knows from "At A Glance".
+// getStatsByGroup() rows don't carry an `isStat` flag (that's a StatTable/column-rendering
+// concept, not part of the stat dictionary), so it has to be added here — without it,
+// StatTable's header falls back to a `col.label` that these objects never had (they have
+// `simpleName` instead), rendering a blank header.
 const yearByYearColumns = computed(() => [
   { key: 'season', label: 'Year', isStat: false },
   { key: 'team', label: 'Team', isStat: false },
-  ...fullStatColumns.value,
+  ...fullStatColumns.value.map((col) => ({ ...col, isStat: true })),
 ])
 
 async function load() {

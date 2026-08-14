@@ -12,14 +12,20 @@ const router = Router()
 //
 // sortStat controls which of the requested stats the results are ranked by (defaults to the
 // first one in `stats`). This matters because the upstream `/stats` endpoint returns rows in
-// ITS OWN default order, not sorted by whatever the caller cares about — so a large enough
-// pool is always fetched from upstream (POOL_SIZE, well above the max page the UI ever shows)
-// and THEN fully sorted server-side by sortStat before slicing to `limit`. Only sorting the
-// already-truncated top-`limit` rows (the previous behavior) silently drops any player whose
-// best stat wasn't also good enough to land in MLB's own default-sorted top page — e.g.
-// building a "career hits + stolen bases" board sorted by hits could cut a stolen-base leader
-// who isn't a hits leader before the re-sort ever sees them.
-const POOL_SIZE = 300
+// ITS OWN default order (some single "prominent" counting stat, not chosen by us) — so a pool
+// large enough to contain the true all-time leaders in ANY stat has to be fetched, then fully
+// sorted server-side by sortStat before slicing to `limit`.
+//
+// POOL_SIZE used to be 300, which is where the actual reported bug lived: Rickey Henderson
+// (the real career stolen-base leader, 1406 SB) never appeared on the stolen-base leaderboard
+// because he doesn't rank in the upstream API's own top-300-by-whatever-it-defaults-to, so he
+// was excluded before the sortStat re-sort ever got to see him — sorting a pool that already
+// excludes the true leader can't fix the result, no matter how correct the sort itself is.
+// 3000 comfortably covers every player who's ever accumulated enough career volume in any
+// single counting or rate stat to plausibly lead a category (MLB's entire all-time player
+// pool for significant-playing-time players is well under this), and this is a single request
+// cached for 5 minutes, not something repeated per leaderboard view.
+const POOL_SIZE = 3000
 
 router.get('/', async (req, res) => {
   const season = req.query.season || new Date().getFullYear()
