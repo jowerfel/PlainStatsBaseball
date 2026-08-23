@@ -1,8 +1,8 @@
 <script setup>
 import { ref, computed, watchEffect } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getPlayer, getPlayerGameLog, getPlayerYearByYear } from '@/services/mlbApi.js'
-import { getStatsByGroup, statDictionary } from '@/data/statDictionary.js'
+import { getStatsByGroup } from '@/data/statDictionary.js'
 import { useFollowedPlayersStore } from '@/store/followedPlayers.js'
 import StatBadge from '@/components/StatBadge.vue'
 import StatTooltip from '@/components/StatTooltip.vue'
@@ -13,6 +13,7 @@ const props = defineProps({
 })
 
 const route = useRoute()
+const router = useRouter()
 const player = ref(null)
 const hittingStats = ref(null)
 const pitchingStats = ref(null)
@@ -24,39 +25,66 @@ const loading = ref(true)
 const errorMsg = ref('')
 const followed = useFollowedPlayersStore()
 
-const isPitcher = computed(() => {
-  const code = player.value?.primaryPosition?.code
-  return code === '1'
-})
+// Position code '1' is a rough default guess, not a hard rule — two-way players (Ohtani)
+// and anyone who pitched before the DH rule (routinely batting even as a primary pitcher)
+// can have real stats in BOTH groups. The dropdown below always lets the person switch;
+// this only decides which one loads first.
+const defaultGroup = computed(() => (player.value?.primaryPosition?.code === '1' ? 'pitching' : 'hitting'))
 
+// One control surface handles both which stat group AND which timeframe show —
+// combining what used to be a separate "season stats" page, "career stats" page, and an
+// implicit hitting-or-pitching split into one page with two toggles, so there's one place
+// for all of a player's stats instead of scattered views.
+const selectedGroup = ref(route.query.group === 'pitching' || route.query.group === 'hitting'
+  ? route.query.group
+  : null) // null = not yet decided, falls back to defaultGroup once the player loads
 const selectedSeason = computed(() =>
   route.query.season ? String(route.query.season) : String(new Date().getFullYear()),
 )
 const isCareer = computed(() => selectedSeason.value === 'career')
 
-const primaryGroup = computed(() => (isPitcher.value ? 'pitching' : 'hitting'))
-const primaryStats = computed(() => (isPitcher.value ? pitchingStats.value : hittingStats.value))
+const activeGroup = computed(() => selectedGroup.value || defaultGroup.value)
+const activeStats = computed(() => (activeGroup.value === 'pitching' ? pitchingStats.value : hittingStats.value))
 
-// "At a glance" headline stats — a curated subset, per spec 5.4 (4-6 badges)
+// Whether the player has any usable stats at all in a group, independent of which group
+// is currently selected — drives the "try the other group" hint when one is empty.
+const hasHitting = computed(() => !!hittingStats.value)
+const hasPitching = computed(() => !!pitchingStats.value)
+
 const glanceKeys = computed(() =>
-  isPitcher.value
+  activeGroup.value === 'pitching'
     ? ['era', 'whip', 'inningsPitched', 'strikeOuts', 'war_pitching']
     : ['avg', 'obp', 'ops', 'homeRuns', 'war'],
 )
 
-const fullStatColumns = computed(() => getStatsByGroup(primaryGroup.value))
+const fullStatColumns = computed(() => getStatsByGroup(activeGroup.value))
 
-// "Year" + "Team" up front, then the same stat columns used in the full stat line, so every
-// season row lines up with the badges/headers the person already knows from "At A Glance".
-// getStatsByGroup() rows don't carry an `isStat` flag (that's a StatTable/column-rendering
-// concept, not part of the stat dictionary), so it has to be added here — without it,
-// StatTable's header falls back to a `col.label` that these objects never had (they have
-// `simpleName` instead), rendering a blank header.
 const yearByYearColumns = computed(() => [
   { key: 'season', label: 'Year', isStat: false },
   { key: 'team', label: 'Team', isStat: false },
   ...fullStatColumns.value.map((col) => ({ ...col, isStat: true })),
 ])
+
+function setGroup(group) {
+  selectedGroup.value = group
+  router.replace({ query: { ...route.query, group } })
+  // activeGroup only affects the game-log/year-by-year fetch (the player object itself
+  // already carries both hitting and pitching stats), and that read happens after an
+  // `await` inside load() — outside watchEffect's synchronous tracking window — so the
+  // switch needs to be re-triggered explicitly rather than relying on reactivity.
+  loadYearByYear(group)
+  if (!isCareer.value) loadGameLog(group)
+}
+
+function setSeasonMode(mode) {
+  const query = { ...route.query }
+  if (mode === 'career') {
+    query.season = 'career'
+  } else {
+    delete query.season
+  }
+  router.replace({ query }).then(load)
+}
 
 async function load() {
   loading.value = true
@@ -68,14 +96,10 @@ async function load() {
     hittingStats.value = data.hittingSeasonStats
     pitchingStats.value = data.pitchingSeasonStats
 
-    const group = data.player?.primaryPosition?.code === '1' ? 'pitching' : 'hitting'
+    const group = activeGroup.value
 
     if (!isCareer.value) {
-      const logData = await getPlayerGameLog(props.playerId, {
-        season: selectedSeason.value,
-        group,
-      })
-      gameLog.value = logData.games || []
+      await loadGameLog(group)
     } else {
       gameLog.value = []
     }
@@ -85,6 +109,18 @@ async function load() {
     errorMsg.value = err.message || 'Could not load this player.'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadGameLog(group) {
+  try {
+    const logData = await getPlayerGameLog(props.playerId, {
+      season: selectedSeason.value,
+      group,
+    })
+    gameLog.value = logData.games || []
+  } catch (err) {
+    gameLog.value = []
   }
 }
 
@@ -119,7 +155,7 @@ function toggleFollow() {
       teamId: player.value?.currentTeam?.id,
       teamName: player.value?.currentTeam?.name,
       position: player.value?.primaryPosition?.abbreviation,
-      role: isPitcher.value ? 'pitching' : 'hitting',
+      role: activeGroup.value,
     })
   }
 }
@@ -155,35 +191,72 @@ function formatOpponent(opponent) {
       </span>
       <span v-if="player.currentAge"> &middot; Age {{ player.currentAge }}</span>
       <button style="margin-left: 10px;" @click="toggleFollow">
-        {{ followed.isFollowing(playerId) ? 'Unfollow' : `Follow ${isPitcher ? 'pitcher' : 'hitter'}` }}
+        {{ followed.isFollowing(playerId) ? 'Unfollow' : `Follow ${activeGroup === 'pitching' ? 'pitcher' : 'hitter'}` }}
       </button>
     </p>
-    <p class="muted">
-      <RouterLink
-        v-if="!isCareer"
-        :to="{ path: route.path, query: { ...route.query, season: 'career' } }"
-      >
-        View career stats
-      </RouterLink>
-      <RouterLink v-else :to="{ path: route.path, query: {} }">
-        View this season's stats
-      </RouterLink>
-    </p>
+
+    <!-- One control surface for both "which stats" and "which timeframe", instead of
+         separate season/career pages and a hardcoded hitting-or-pitching split. Any player
+         with data in both groups (two-way players, pre-DH pitchers who batted) can freely
+         switch — this is the actual fix for not being able to see Ohtani's pitching stats
+         or an old pitcher's hitting stats. -->
+    <div class="section" style="display: flex; gap: 24px; flex-wrap: wrap;">
+      <div v-if="hasHitting || hasPitching">
+        <strong class="muted" style="font-size: 12px;">Stats:</strong>
+        <label class="checkbox-row" style="display: inline; margin-right: 10px;">
+          <input
+            type="radio"
+            value="hitting"
+            :checked="activeGroup === 'hitting'"
+            @change="setGroup('hitting')"
+          />
+          Hitting
+        </label>
+        <label class="checkbox-row" style="display: inline;">
+          <input
+            type="radio"
+            value="pitching"
+            :checked="activeGroup === 'pitching'"
+            @change="setGroup('pitching')"
+          />
+          Pitching
+        </label>
+      </div>
+      <div>
+        <strong class="muted" style="font-size: 12px;">Timeframe:</strong>
+        <label class="checkbox-row" style="display: inline; margin-right: 10px;">
+          <input type="radio" value="season" :checked="!isCareer" @change="setSeasonMode('season')" />
+          {{ selectedSeason === 'career' ? new Date().getFullYear() : selectedSeason }} Season
+        </label>
+        <label class="checkbox-row" style="display: inline;">
+          <input type="radio" value="career" :checked="isCareer" @change="setSeasonMode('career')" />
+          Career
+        </label>
+      </div>
+    </div>
 
     <div class="section">
-      <h2>{{ isCareer ? 'Career' : 'This season' }} At A Glance</h2>
-      <p v-if="!primaryStats" class="muted">No season stats available yet.</p>
+      <h2>{{ isCareer ? 'Career' : 'This season' }} At A Glance ({{ activeGroup }})</h2>
+      <p v-if="!activeStats" class="muted">
+        No {{ activeGroup }} stats available for this timeframe.
+        <template v-if="activeGroup === 'hitting' && hasPitching">
+          Try <a href="#" @click.prevent="setGroup('pitching')">pitching stats</a> instead.
+        </template>
+        <template v-else-if="activeGroup === 'pitching' && hasHitting">
+          Try <a href="#" @click.prevent="setGroup('hitting')">hitting stats</a> instead.
+        </template>
+      </p>
       <div v-else style="display: flex; gap: 20px; flex-wrap: wrap;">
         <StatBadge
           v-for="key in glanceKeys"
           :key="key"
           :stat-key="key"
-          :value="primaryStats[key]"
+          :value="activeStats[key]"
         />
       </div>
     </div>
 
-    <div v-if="isPitcher" class="section">
+    <div v-if="activeGroup === 'pitching'" class="section">
       <p class="muted">
         Pitch-by-pitch tracking, recent starts, and the next-start estimate live on the
         <RouterLink :to="`/pitchers/${playerId}`">Pitcher Tracker</RouterLink>.
@@ -191,8 +264,8 @@ function formatOpponent(opponent) {
     </div>
 
     <div class="section">
-      <h2>Full Stat Line ({{ primaryGroup }})</h2>
-      <p v-if="!primaryStats" class="muted">No season stats available yet.</p>
+      <h2>Full Stat Line ({{ activeGroup }})</h2>
+      <p v-if="!activeStats" class="muted">No {{ activeGroup }} stats available for this timeframe.</p>
       <table v-else class="plain-table">
         <thead>
           <tr>
@@ -204,8 +277,8 @@ function formatOpponent(opponent) {
         <tbody>
           <tr>
             <td v-for="col in fullStatColumns" :key="col.key">
-              <StatBadge :stat-key="col.key" :value="primaryStats[col.key]" dot />
-              <span>{{ primaryStats[col.key] !== undefined ? primaryStats[col.key] : '—' }}</span>
+              <StatBadge :stat-key="col.key" :value="activeStats[col.key]" dot />
+              <span>{{ activeStats[col.key] !== undefined ? activeStats[col.key] : '—' }}</span>
             </td>
           </tr>
         </tbody>
@@ -213,7 +286,11 @@ function formatOpponent(opponent) {
     </div>
 
     <div class="section">
-      <h2>Year by Year ({{ primaryGroup }})</h2>
+      <h2>Year by Year ({{ activeGroup }})</h2>
+      <p class="muted">
+        Every season on record for this stat group — the same view whether you got here
+        from "season" or "career" above, since career is just every year added up.
+      </p>
       <p v-if="yearByYearLoading" class="muted">Loading season history&hellip;</p>
       <p v-else-if="yearByYearError" class="error-text">{{ yearByYearError }}</p>
       <p v-else-if="yearByYear.length === 0" class="muted">
@@ -223,7 +300,7 @@ function formatOpponent(opponent) {
         v-else
         :columns="yearByYearColumns"
         :rows="yearByYear"
-        :caption="`${player.fullName} — season by season`"
+        :caption="`${player.fullName} — season by season (${activeGroup})`"
       />
     </div>
 
@@ -236,7 +313,7 @@ function formatOpponent(opponent) {
             <tr>
               <th>Date</th>
               <th>Opponent</th>
-              <template v-if="isPitcher">
+              <template v-if="activeGroup === 'pitching'">
                 <th><StatTooltip stat-key="inningsPitched" label="IP" /></th>
                 <th><StatTooltip stat-key="hitsAllowed" label="H" /></th>
                 <th><StatTooltip stat-key="runsAllowed" label="R" /></th>
@@ -254,7 +331,7 @@ function formatOpponent(opponent) {
             <tr v-for="(g, idx) in gameLog" :key="idx">
               <td>{{ g.date }}</td>
               <td>{{ formatOpponent(g.opponent) }}</td>
-              <template v-if="isPitcher">
+              <template v-if="activeGroup === 'pitching'">
                 <td>{{ g.stat?.inningsPitched ?? '—' }}</td>
                 <td>{{ g.stat?.hits ?? '—' }}</td>
                 <td>{{ g.stat?.runs ?? '—' }}</td>

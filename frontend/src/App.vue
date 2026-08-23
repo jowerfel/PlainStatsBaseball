@@ -15,6 +15,8 @@ import { RouterLink, RouterView } from 'vue-router'
         <span class="nav-sep">|</span>
         <RouterLink to="/players/search">Players</RouterLink>
         <span class="nav-sep">|</span>
+        <RouterLink to="/compare">Compare</RouterLink>
+        <span class="nav-sep">|</span>
         <RouterLink to="/live">Live</RouterLink>
         <span class="nav-sep">|</span>
         <RouterLink to="/standings">Standings</RouterLink>

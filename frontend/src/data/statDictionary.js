@@ -73,6 +73,50 @@ export const statDictionary = {
     format: 'integer',
     group: 'hitting',
   },
+  singles: {
+    realName: '1B',
+    simpleName: '1B',
+    fullName: 'Singles',
+    shortExplain: 'Hits that were only good for first base.',
+    extraExplain: 'Singles = Hits minus doubles, triples, and home runs.',
+    goodDirection: 'high',
+    scale: { poor: 35, average: 75, great: 110 },
+    format: 'integer',
+    group: 'hitting',
+  },
+  doubles: {
+    realName: '2B',
+    simpleName: '2B',
+    fullName: 'Doubles',
+    shortExplain: 'Hits where the batter reached second base.',
+    extraExplain: 'Doubles are a solid sign of gap power and bat speed.',
+    goodDirection: 'high',
+    scale: { poor: 8, average: 22, great: 35 },
+    format: 'integer',
+    group: 'hitting',
+  },
+  triples: {
+    realName: '3B',
+    simpleName: '3B',
+    fullName: 'Triples',
+    shortExplain: 'Hits where the batter reached third base.',
+    extraExplain: 'Triples are rare — they usually mix hard contact with real speed.',
+    goodDirection: 'high',
+    scale: { poor: 0, average: 2, great: 6 },
+    format: 'integer',
+    group: 'hitting',
+  },
+  atBats: {
+    realName: 'AB',
+    simpleName: 'AB',
+    fullName: 'At Bats',
+    shortExplain: 'Official at-bats, not counting walks, HBP, or sacrifices.',
+    extraExplain: 'AB is the denominator behind AVG and SLG.',
+    goodDirection: 'high',
+    scale: { poor: 100, average: 300, great: 550 },
+    format: 'integer',
+    group: 'hitting',
+  },
   homeRuns: {
     realName: 'HR',
     simpleName: 'HR',
@@ -453,4 +497,27 @@ export function getStatsByGroup(group) {
   return Object.entries(statDictionary)
     .filter(([, def]) => def.group === group)
     .map(([key, def]) => ({ key, ...def }))
+}
+
+// Formats a value using an explicit format string, for callers (like custom stats) that
+// don't have a statDictionary entry to look the format up from.
+export function formatValueAs(format, value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—'
+  const num = Number(value)
+  switch (format) {
+    case 'avg':
+      return num.toFixed(3).replace(/^0\./, '.').replace(/^-0\./, '-.')
+    case 'decimal2':
+      return num.toFixed(2)
+    case 'decimal1':
+      return num.toFixed(1)
+    case 'decimal3':
+      return num.toFixed(3)
+    case 'percent':
+      return `${num.toFixed(1)}%`
+    case 'integer':
+      return `${Math.round(num)}`
+    default:
+      return `${num}`
+  }
 }

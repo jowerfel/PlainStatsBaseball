@@ -7,6 +7,7 @@ import PitcherListView from '@/views/PitcherListView.vue'
 import PitcherTrackerView from '@/views/PitcherTrackerView.vue'
 import PlayerSearchView from '@/views/PlayerSearchView.vue'
 import PlayerRundownView from '@/views/PlayerRundownView.vue'
+import ComparePlayersView from '@/views/ComparePlayersView.vue'
 import LiveGamesView from '@/views/LiveGamesView.vue'
 import StandingsView from '@/views/StandingsView.vue'
 import AboutView from '@/views/AboutView.vue'
@@ -21,6 +22,7 @@ const router = createRouter({
     { path: '/pitchers/:playerId', name: 'pitcher-tracker', component: PitcherTrackerView, props: true },
     { path: '/players/search', name: 'player-search', component: PlayerSearchView },
     { path: '/players/:playerId', name: 'player-rundown', component: PlayerRundownView, props: true },
+    { path: '/compare', name: 'compare-players', component: ComparePlayersView },
     { path: '/live', name: 'live-games', component: LiveGamesView },
     { path: '/standings', name: 'standings', component: StandingsView },
     { path: '/about', name: 'about', component: AboutView },

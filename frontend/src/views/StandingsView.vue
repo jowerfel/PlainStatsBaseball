@@ -1,10 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getStandings, getHealth } from '@/services/mlbApi.js'
-import StatTooltip from '@/components/StatTooltip.vue'
 
 const season = ref(new Date().getFullYear())
 const records = ref([])
+const wildCardRecords = ref([])
 const loading = ref(false)
 const errorMsg = ref('')
 const lastLoaded = ref('')
@@ -18,11 +18,13 @@ async function load() {
     await getHealth()
     const data = await getStandings(season.value)
     records.value = data.records || []
+    wildCardRecords.value = data.wildCardRecords || []
     lastLoaded.value = new Date().toLocaleTimeString()
   } catch (err) {
     backendHealthy.value = false
     errorMsg.value = err.message || 'Could not load standings.'
     records.value = []
+    wildCardRecords.value = []
   } finally {
     loading.value = false
   }
@@ -30,6 +32,12 @@ async function load() {
 
 function recordText(teamRecord) {
   return `${teamRecord.wins}-${teamRecord.losses}`
+}
+
+// Wild card leaders (rank 1-3, in each league) are already in a playoff spot; rank 4+ are
+// chasing it. A thin rule between them makes the cutoff visually obvious without extra markup.
+function isLastWildCardSpot(teamRecord) {
+  return Number(teamRecord.wildCardRank) === 3
 }
 
 onMounted(load)
@@ -86,6 +94,41 @@ onMounted(load)
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="section" v-if="wildCardRecords.length">
+      <h2>Wild Card Standings</h2>
+      <p class="muted">
+        The top 3 teams per league (above the line) hold a wild card spot. GB is games
+        behind the last wild card spot, not the division leader.
+      </p>
+      <div v-for="(record, idx) in wildCardRecords" :key="idx" class="section">
+        <h3>{{ record.league }}</h3>
+        <div class="table-scroll">
+          <table class="plain-table">
+            <thead>
+              <tr>
+                <th>WC Rank</th>
+                <th>Team</th>
+                <th>W-L</th>
+                <th>Win %</th>
+                <th>WC GB</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="team in record.teamRecords" :key="team.teamId">
+                <tr :class="{ 'wc-cutoff-row': isLastWildCardSpot(team) }">
+                  <td>{{ team.wildCardRank ?? '—' }}</td>
+                  <td>{{ team.abbreviation || team.teamName }}</td>
+                  <td>{{ recordText(team) }}</td>
+                  <td>{{ team.winPct }}</td>
+                  <td>{{ team.wildCardGamesBack || '—' }}</td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </template>

@@ -186,7 +186,14 @@ function mergeDerivedStats(stats, group, personId, season) {
   const merged = { ...stats }
 
   if (group === 'hitting') {
-    // plain MLB API mode only
+    // Not a real MLB API field — the API only gives total hits plus 2B/3B/HR — but it's
+    // the natural base unit for custom hitting formulas (e.g. a weighted slugging), so
+    // it's derived here once and passed straight through everywhere hitting stats flow.
+    const doubles = Number(merged.doubles || 0)
+    const triples = Number(merged.triples || 0)
+    const homeRuns = Number(merged.homeRuns || 0)
+    const hits = Number(merged.hits || 0)
+    merged.singles = hits - doubles - triples - homeRuns
   } else {
     const battersFaced = Number(merged.battersFaced || 0)
     if (battersFaced > 0) {

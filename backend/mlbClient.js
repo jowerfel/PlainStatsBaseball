@@ -110,8 +110,10 @@ export function getTeamRoster(teamId) {
   return mlbGet(`/teams/${teamId}/roster`)
 }
 
-export function getStandings(season, leagueId = '103,104') {
-  return mlbGet('/standings', { leagueId, season })
+export function getStandings(season, leagueId = '103,104', standingsTypes) {
+  const params = { leagueId, season }
+  if (standingsTypes) params.standingsTypes = standingsTypes
+  return mlbGet('/standings', params)
 }
 
 export function getSeasonLeaderboard({ season, group = 'hitting', sportId = 1, limit = 100, statType } = {}) {

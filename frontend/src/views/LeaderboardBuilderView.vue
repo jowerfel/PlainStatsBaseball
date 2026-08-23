@@ -2,7 +2,8 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getLeaderboard } from '@/services/mlbApi.js'
-import { getStatsByGroup } from '@/data/statDictionary.js'
+import { getStatsByGroup, formatValueAs } from '@/data/statDictionary.js'
+import { getCustomStatsByGroup, getCustomStat, isCustomStatKey, computeCustomStat } from '@/data/customStats.js'
 import StatTable from '@/components/StatTable.vue'
 
 const route = useRoute()
@@ -22,6 +23,7 @@ const season = ref(
 )
 
 const availableStats = computed(() => getStatsByGroup(group.value))
+const availableCustomStats = computed(() => getCustomStatsByGroup(group.value))
 
 const rows = ref([])
 const loading = ref(false)
@@ -41,20 +43,59 @@ function toggleStat(key) {
   }
 }
 
+// Custom stats have no statDictionary entry, so they're marked isStat: false (skips
+// StatTable's dictionary-driven formatting/quality-dot logic) but still get a real
+// simpleName label and a pre-formatted display value, computed below.
 const columns = computed(() => [
   { key: 'playerName', label: 'Player', isStat: false, link: (row) => `/players/${row.id}` },
   { key: 'teamName', label: 'Team', isStat: false },
-  ...selectedStats.value.map((key) => ({ key, isStat: true, label: key })),
+  ...selectedStats.value.map((key) => {
+    const customDef = isCustomStatKey(key) ? getCustomStat(key) : null
+    return {
+      key,
+      isStat: !customDef,
+      label: customDef ? customDef.name : key,
+    }
+  }),
 ])
 
+// Custom stats aren't returned by the backend (it doesn't know the formulas) — they're
+// computed here, client-side, from the same raw `stat` object the backend already sends
+// for every row (which includes the base fields like AB/H/2B/3B/HR/etc. formulas need).
+// Custom values are pre-formatted into display strings since they skip StatTable's
+// dictionary-driven number formatting (isStat: false above); numeric sort still works off
+// the raw number kept in `<key>_raw`.
 const tableRows = computed(() =>
-  rows.value.map((r) => ({
-    id: r.playerId,
-    playerName: r.playerName,
-    teamName: r.teamName,
-    ...Object.fromEntries(selectedStats.value.map((key) => [key, r.stat?.[key]])),
-  })),
+  rows.value.map((r) => {
+    const row = { id: r.playerId, playerName: r.playerName, teamName: r.teamName }
+    for (const key of selectedStats.value) {
+      if (isCustomStatKey(key)) {
+        const def = getCustomStat(key)
+        const raw = computeCustomStat(def, r.stat)
+        row[key] = raw === null ? '—' : formatValueAs(def.format || 'decimal3', raw)
+        row[`${key}_raw`] = raw
+      } else {
+        row[key] = r.stat?.[key]
+      }
+    }
+    return row
+  }),
 )
+
+// A custom stat's value only exists client-side, so the backend can't sort by it. When the
+// active sort is a custom stat, sort the already-fetched rows here instead of re-querying.
+const displayRows = computed(() => {
+  if (!activeSortStat.value || !isCustomStatKey(activeSortStat.value)) return tableRows.value
+  const rawKey = `${activeSortStat.value}_raw`
+  const dir = activeSortDir.value === 'asc' ? 1 : -1
+  return [...tableRows.value].sort((a, b) => {
+    const av = a[rawKey]
+    const bv = b[rawKey]
+    if (av === null || av === undefined) return 1
+    if (bv === null || bv === undefined) return -1
+    return (av - bv) * dir
+  })
+})
 
 // StatTable's own header click normally does a purely client-side re-sort, which is only
 // correct if the rows it's holding are the full/true population for whatever column got
@@ -62,15 +103,19 @@ const tableRows = computed(() =>
 // particular stat, so re-sorting a different stat column client-side would just reorder
 // that same incomplete slice instead of showing the actual leaders for that stat (this was
 // the leaderboard sorting bug). Re-running the search against the backend with the newly
-// clicked stat as sortStat gets the real top-N for that stat instead.
+// clicked stat as sortStat gets the real top-N for that stat instead — UNLESS the clicked
+// stat is a custom one, which the backend doesn't know how to sort by; that case just
+// re-sorts the rows already on screen (see displayRows above).
 function onSortRequested(col) {
   if (!col.isStat) return
   if (activeSortStat.value === col.key) {
     activeSortDir.value = activeSortDir.value === 'desc' ? 'asc' : 'desc'
   } else {
     activeSortStat.value = col.key
-    activeSortDir.value = 'desc'
+    const customDef = isCustomStatKey(col.key) ? getCustomStat(col.key) : null
+    activeSortDir.value = customDef ? (customDef.goodDirection === 'low' ? 'asc' : 'desc') : 'desc'
   }
+  if (isCustomStatKey(col.key)) return // displayRows handles it reactively, no refetch needed
   runSearch()
 }
 
@@ -98,18 +143,25 @@ async function runSearch() {
     },
   })
 
+  // The backend can only sort by stats it recognizes. If the active sort is a custom
+  // stat, ask it to sort by the first real (non-custom) selected stat instead, then
+  // displayRows re-sorts the fetched pool by the custom stat client-side.
+  const backendSortStat = isCustomStatKey(activeSortStat.value)
+    ? selectedStats.value.find((k) => !isCustomStatKey(k)) || undefined
+    : activeSortStat.value
+
   try {
     const data = await getLeaderboard({
       group: group.value,
-      stats: selectedStats.value,
-      sortStat: activeSortStat.value,
+      stats: selectedStats.value.filter((k) => !isCustomStatKey(k)),
+      sortStat: backendSortStat,
       season: seasonValue,
       minPA: group.value === 'hitting' ? minPA.value || undefined : undefined,
       minIP: group.value === 'pitching' ? minIP.value || undefined : undefined,
       limit: 100,
     })
     rows.value = data.rows || []
-    if (activeSortDir.value === 'asc') {
+    if (!isCustomStatKey(activeSortStat.value) && activeSortDir.value === 'asc') {
       rows.value = [...rows.value].reverse()
     }
   } catch (err) {
@@ -161,6 +213,23 @@ if (route.query.stats) {
       </label>
     </fieldset>
 
+    <fieldset v-if="availableCustomStats.length">
+      <legend>Custom stats</legend>
+      <label v-for="s in availableCustomStats" :key="s.key" class="checkbox-row">
+        <input
+          type="checkbox"
+          :checked="selectedStats.includes(s.key)"
+          @change="toggleStat(s.key)"
+        />
+        {{ s.name }}
+        <span class="muted">— {{ s.formula }}</span>
+      </label>
+      <p class="muted" style="margin: 4px 0 0 0;">
+        Want to add your own? Edit <code>frontend/src/data/customStats.js</code> — just a
+        name and a formula, no other code to touch.
+      </p>
+    </fieldset>
+
     <fieldset>
       <legend>Filters</legend>
       <label class="checkbox-row">
@@ -204,7 +273,7 @@ if (route.query.stats) {
     <StatTable
       v-else
       :columns="columns"
-      :rows="tableRows"
+      :rows="displayRows"
       :on-header-click="onSortRequested"
       :active-sort-key="activeSortStat"
       :active-sort-dir="activeSortDir"

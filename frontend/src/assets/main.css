@@ -148,8 +148,21 @@ table.plain-table tbody tr:nth-child(odd) {
   background: #ffffff;
 }
 
+table.plain-table td.compare-best {
+  background: #d9f2d9;
+  font-weight: bold;
+}
+
+table.plain-table tr.wc-cutoff-row td {
+  border-bottom: 2px solid #000;
+}
+
 .table-scroll {
   overflow-x: auto;
+  overflow-y: visible;
+  /* Extra bottom padding gives header tooltips (which now open downward, see
+     .stat-tooltip-bubble) room to render without being clipped by this container. */
+  padding-bottom: 4px;
 }
 
 /* --- forms ------------------------------------------------------------- */
@@ -258,9 +271,14 @@ button:hover, .btn:hover {
 .stat-tooltip-bubble {
   display: none;
   position: absolute;
-  bottom: calc(100% + 8px);
+  /* Opens BELOW the trigger, not above. Year-by-year (and other) tables sit inside
+     .table-scroll (overflow-x: auto), and headers are the very first thing in that
+     scroll container — a bubble opening upward has nowhere to go and gets its top
+     sliced off by the container's scroll clipping. Opening downward always has the
+     rest of the table/page below it to render into. */
+  top: calc(100% + 8px);
   left: 0;
-  z-index: 10;
+  z-index: 30;
   min-width: max-content;
   max-width: 320px;
   width: auto;

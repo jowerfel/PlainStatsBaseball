@@ -88,7 +88,16 @@ router.get('/', async (req, res) => {
 
 function withDerivedStats(stat = {}, group) {
   const merged = { ...stat }
-  if (group !== 'pitching') return merged
+  if (group !== 'pitching') {
+    // Same singles derivation as routes/players.js — kept in sync so custom formulas
+    // relying on 1B behave the same in leaderboards as they do on a player's own page.
+    const doubles = Number(merged.doubles || 0)
+    const triples = Number(merged.triples || 0)
+    const homeRuns = Number(merged.homeRuns || 0)
+    const hits = Number(merged.hits || 0)
+    merged.singles = hits - doubles - triples - homeRuns
+    return merged
+  }
 
   const battersFaced = Number(merged.battersFaced || 0)
   if (battersFaced > 0) {
