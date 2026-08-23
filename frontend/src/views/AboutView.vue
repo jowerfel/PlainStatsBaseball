@@ -6,7 +6,7 @@
     one extra note about how to read it.
   </p>
   <p>
-    Data comes from the official MLB Stats API. This site is not affiliated with, endorsed by,
+    Copywrite 2026 Joshua Werfel All rights Reserved. Data comes from the official MLB Stats API. This site is not affiliated with, endorsed by,
     or sponsored by MLB.
   </p>
 </template>
