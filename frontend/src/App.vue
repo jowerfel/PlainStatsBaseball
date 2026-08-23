@@ -30,8 +30,8 @@ import { RouterLink, RouterView } from 'vue-router'
 
   <footer class="site-footer">
     <div class="page-wrap">
-      PlainStats — baseball stats in plain English. Data from the MLB Stats API.
-      Not affiliated with MLB.
+      Copyright 2026 Joshua Werfel All rights Reserved. Data comes from the official MLB Stats API. This site is not affiliated with, endorsed by,
+    or sponsored by MLB.
     </div>
   </footer>
 </template>
