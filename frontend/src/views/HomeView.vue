@@ -14,7 +14,7 @@ const popularPitching = getStatsByGroup('pitching').slice(0, 5)
 
   <div class="section">
     <h2>Look up a player</h2>
-    <p><RouterLink to="/players/search">Search for a player &rarr;</RouterLink></p>
+    <p><RouterLink to="/players/search" data-umami-event="Search">Search for a player &rarr;</RouterLink></p>
   </div>
 
   <div class="section layout-two-col">
@@ -22,7 +22,7 @@ const popularPitching = getStatsByGroup('pitching').slice(0, 5)
       <h2>Popular hitting stats</h2>
       <ul class="text-links-list">
         <li v-for="s in popularHitting" :key="s.key">
-          <RouterLink :to="`/leaderboards/${s.key}`">{{ s.simpleName }}</RouterLink>
+          <RouterLink :to="`/leaderboards/${s.key}`" data-umami-event="Leaderboards">{{ s.simpleName }}</RouterLink>
           — {{ s.shortExplain }}
         </li>
       </ul>
@@ -30,7 +30,7 @@ const popularPitching = getStatsByGroup('pitching').slice(0, 5)
       <h2>Popular pitching stats</h2>
       <ul class="text-links-list">
         <li v-for="s in popularPitching" :key="s.key">
-          <RouterLink :to="`/leaderboards/${s.key}`">{{ s.simpleName }}</RouterLink>
+          <RouterLink :to="`/leaderboards/${s.key}`" data-umami-event="Leaderboards">{{ s.simpleName }}</RouterLink>
           — {{ s.shortExplain }}
         </li>
       </ul>

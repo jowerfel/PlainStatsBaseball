@@ -7,21 +7,21 @@ import { RouterLink, RouterView } from 'vue-router'
     <div class="page-wrap">
       <RouterLink to="/" class="site-title">PlainStats</RouterLink>
       <nav class="site-nav">
-        <RouterLink to="/">Home</RouterLink>
+        <RouterLink to="/" data-umami-event="Went Home">Home</RouterLink>
         <span class="nav-sep">|</span>
-        <RouterLink to="/leaderboards/custom">Leaderboards</RouterLink>
+        <RouterLink to="/leaderboards/custom" data-umami-event="Leaderboards">Leaderboards</RouterLink>
         <span class="nav-sep">|</span>
-        <RouterLink to="/pitchers">Following</RouterLink>
+        <RouterLink to="/pitchers" data-umami-event="Following">Following</RouterLink>
         <span class="nav-sep">|</span>
-        <RouterLink to="/players/search">Players</RouterLink>
+        <RouterLink to="/players/search" data-umami-event="Search" >Players</RouterLink>
         <span class="nav-sep">|</span>
-        <RouterLink to="/compare">Compare</RouterLink>
+        <RouterLink to="/compare" data-umami-event="Compare">Compare</RouterLink>
         <span class="nav-sep">|</span>
-        <RouterLink to="/live">Live</RouterLink>
+        <RouterLink to="/live" data-umami-event="Live">Live</RouterLink>
         <span class="nav-sep">|</span>
-        <RouterLink to="/standings">Standings</RouterLink>
+        <RouterLink to="/standings" data-umami-event="Standings">Standings</RouterLink>
         <span class="nav-sep">|</span>
-        <RouterLink to="/about">About</RouterLink>
+        <RouterLink to="/about" data-umami-event="About">About</RouterLink>
       </nav>
     </div>
   </header>
