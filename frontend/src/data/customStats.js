@@ -52,7 +52,6 @@ export const CUSTOM_STATS = [
     format: 'decimal3',
     shortExplain: 'A custom weighted slugging stat.',
   },
-  
 ]
 
 // Custom stats are registered into statDictionary as soon as this module is imported, so

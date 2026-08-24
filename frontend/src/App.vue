@@ -1,8 +1,34 @@
 <script setup>
+import { ref } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
+
+// Not a cookie banner — PlainStats doesn't use cookies (see the About page) — but the
+// site does save data in the browser's local storage (followed players, Settings
+// choices), so this says so plainly on first visit rather than staying silent about it.
+const NOTICE_KEY = 'plainstats.storageNoticeSeen'
+const showNotice = ref(!localStorage.getItem(NOTICE_KEY))
+
+function dismissNotice() {
+  showNotice.value = false
+  try {
+    localStorage.setItem(NOTICE_KEY, '1')
+  } catch {
+    // localStorage unavailable — notice will just show again next visit, which is fine.
+  }
+}
 </script>
 
 <template>
+  <div v-if="showNotice" class="storage-notice">
+    <div class="page-wrap">
+      <span>
+        This site saves followed players and Settings choices in your browser's local
+        storage (not cookies) — see <RouterLink to="/about">About</RouterLink> for details.
+      </span>
+      <button @click="dismissNotice">Got it</button>
+    </div>
+  </div>
+
   <header class="site-header">
     <div class="page-wrap">
       <RouterLink to="/" class="site-title">PlainStats</RouterLink>

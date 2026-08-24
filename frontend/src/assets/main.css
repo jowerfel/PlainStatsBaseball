@@ -1,6 +1,17 @@
 /* PlainStats — deliberately bare-bones. No gradients, no cards, no animation,
    no border-radius, no box-shadow, no webfonts. See spec section 6. */
 
+/* Theme variables — defaults match the original hardcoded look. The Settings page
+   (see store/theme.js and views/SettingsView.vue) overrides these three at runtime by
+   setting inline custom properties on :root; everything else in this file reads from
+   them instead of a hardcoded value, so a user's chosen background/text/font applies
+   everywhere without touching any other rule. */
+:root {
+  --user-bg: #ffffff;
+  --user-text: #000000;
+  --user-font: Verdana, Arial, Helvetica, sans-serif;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -11,10 +22,10 @@ html, body {
 }
 
 body {
-  font-family: Verdana, Arial, Helvetica, sans-serif;
+  font-family: var(--user-font);
   font-size: 13px;
-  color: #000;
-  background: #ffffff;
+  color: var(--user-text);
+  background: var(--user-bg);
 }
 
 a {
@@ -47,12 +58,12 @@ a:hover {
 .site-title {
   font-size: 18px;
   font-weight: bold;
-  color: #000;
+  color: var(--user-text);
   text-decoration: none;
 }
 
 .site-title:visited {
-  color: #000;
+  color: var(--user-text);
 }
 
 .site-nav {
@@ -242,7 +253,7 @@ button:hover, .btn:hover {
 }
 
 .stat-badge.quality-none {
-  color: #000;
+  color: var(--user-text);
   border-color: #999;
 }
 
@@ -296,6 +307,28 @@ button:hover, .btn:hover {
 .stat-tooltip-wrap:focus .stat-tooltip-bubble,
 .stat-tooltip-wrap.tooltip-open .stat-tooltip-bubble {
   display: block;
+}
+
+/* --- storage notice banner -------------------------------------------------- */
+
+.storage-notice {
+  background: #ffffe0;
+  border-bottom: 1px solid #999;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.storage-notice .page-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.storage-notice button {
+  font-size: 12px;
+  padding: 2px 8px;
 }
 
 /* --- misc helper classes --------------------------------------------------- */

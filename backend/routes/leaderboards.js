@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
+import { deriveSingles, attachWar } from '../derivedStats.js'
 
 const router = Router()
 
@@ -91,11 +92,8 @@ function withDerivedStats(stat = {}, group) {
   if (group !== 'pitching') {
     // Same singles derivation as routes/players.js — kept in sync so custom formulas
     // relying on 1B behave the same in leaderboards as they do on a player's own page.
-    const doubles = Number(merged.doubles || 0)
-    const triples = Number(merged.triples || 0)
-    const homeRuns = Number(merged.homeRuns || 0)
-    const hits = Number(merged.hits || 0)
-    merged.singles = hits - doubles - triples - homeRuns
+    merged.singles = deriveSingles(merged)
+    attachWar(merged, 'hitting')
     return merged
   }
 
@@ -112,7 +110,11 @@ function withDerivedStats(stat = {}, group) {
   if (merged.runs !== undefined) merged.runsAllowed = merged.runs
 
   merged.baseOnBallsPitching = merged.baseOnBalls
-  merged.war_pitching = merged.war
+  // attachWar reads the raw `hits`/`homeRuns` fields (a pitching split's own allowed
+  // totals) and sets `merged.war_pitching` — those raw fields are still present on `merged`
+  // alongside the hitsAllowed/homeRunsAllowed aliases added just above, so this must run
+  // after those raw fields are known, but doesn't actually depend on the aliases themselves.
+  attachWar(merged, 'pitching')
   return merged
 }
 

@@ -8,7 +8,7 @@ const popularPitching = getStatsByGroup('pitching').slice(0, 5)
 <template>
   <h1>PlainStats</h1>
   <p class="subtitle">
-    Baseball stats, explained in plain English. No jargon, no clutter — just what a number
+    Baseball stats, explained in plain English. No clutter — just what a number
     means and whether it's good.
   </p>
 
@@ -39,10 +39,10 @@ const popularPitching = getStatsByGroup('pitching').slice(0, 5)
     <div class="layout-sidebar">
       <h3>More</h3>
       <ul class="text-links-list">
-        <li><RouterLink to="/leaderboards/custom">Build a custom leaderboard</RouterLink></li>
-        <li><RouterLink to="/pitchers">Following</RouterLink></li>
-        <li><RouterLink to="/live">Live games</RouterLink></li>
-        <li><RouterLink to="/about">About this site</RouterLink></li>
+        <li><RouterLink to="/leaderboards/custom"> data-umami-event="Leaderboards"Build a custom leaderboard</RouterLink></li>
+        <li><RouterLink to="/pitchers" data-umami-event="Following">Following</RouterLink></li>
+        <li><RouterLink to="/live" data-umami-event="Live">Live games</RouterLink></li>
+        <li><RouterLink to="/about" data-umami-event="About">About this site</RouterLink></li>
       </ul>
     </div>
   </div>
