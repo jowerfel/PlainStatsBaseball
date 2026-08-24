@@ -30,7 +30,7 @@ const jwarPitching = statDictionary.war_pitching
     <p class="muted">
       These aren't official MLB stats — they're formulas built specifically for this site.
       They're editable in the codebase (<code>frontend/src/data/customStats.js</code> for
-      formula-style stats, <code>backend/derivedStats.js</code> for JWar).
+      formula-style stats, <code>backend/derivedStats.js</code> for JWins).
     </p>
 
     <h3>{{ jwarHitting.simpleName }} (hitters)</h3>

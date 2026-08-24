@@ -32,9 +32,10 @@ export function inningsPitchedToDecimal(ip) {
 // API doesn't publish WAR at all, which is why the site's WAR column was always blank
 // before this). Defined once here; both players.js and leaderboards.js call these so a
 // player's WAR reads the same on their own page, in year-by-year/career, and on
-// leaderboards.
+// leaderboards. Displayed on the site as "JWins" (see statDictionary.js's war/war_pitching
+// entries) — the field names here (war, computeHitterWar, etc.) stay as-is internally.
 //
-// Hitters: WAR = 1B*0.44 + 2B*0.74 + 3B*1.04 + HR*1.4 + SO*(-0.3) + BB*0.29 + SB*0.2 + HBP*0.31
+// Hitters: WAR = (1B*0.44 + 2B*0.74 + 3B*1.04 + HR*1.4 + SO*(-0.3) + BB*0.29 + SB*0.2 + HBP*0.31) / 10
 export function computeHitterWar(stat) {
   const singles = stat.singles !== undefined ? Number(stat.singles) : deriveSingles(stat)
   const doubles = Number(stat.doubles || 0)
@@ -45,7 +46,7 @@ export function computeHitterWar(stat) {
   const stolenBases = Number(stat.stolenBases || 0)
   const hitByPitch = Number(stat.hitByPitch || 0)
 
-  return (
+  const raw =
     singles * 0.44 +
     doubles * 0.74 +
     triples * 1.04 +
@@ -54,10 +55,11 @@ export function computeHitterWar(stat) {
     baseOnBalls * 0.29 +
     stolenBases * 0.2 +
     hitByPitch * 0.31
-  )
+
+  return raw / 10
 }
 
-// Pitchers: WAR = (nonHRHitsAllowed)*(-0.55) + HRAllowed*(-1.4) + SO*0.3 + BB*(-0.29) + IP*0.6
+// Pitchers: WAR = ((nonHRHitsAllowed)*(-0.55) + HRAllowed*(-1.4) + SO*0.3 + BB*(-0.29) + IP*0.6) / 10
 // "Hits allowed" and "home runs allowed" are the raw `hits`/`homeRuns` fields on a
 // pitching-split stat object (the MLB API's pitching stat rows report what the pitcher
 // gave up under those same field names — this is the same raw data leaderboards.js
@@ -70,13 +72,14 @@ export function computePitcherWar(stat) {
   const baseOnBalls = Number(stat.baseOnBalls || 0)
   const inningsPitched = inningsPitchedToDecimal(stat.inningsPitched)
 
-  return (
+  const raw =
     nonHrHitsAllowed * -0.55 +
     homeRunsAllowed * -1.4 +
     strikeOuts * 0.3 +
     baseOnBalls * -0.29 +
     inningsPitched * 0.6
-  )
+
+  return raw / 10
 }
 
 // Computes and attaches WAR to a stat object in place. Hitting stats get `war` (matching
