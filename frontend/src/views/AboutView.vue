@@ -21,7 +21,7 @@ const jwarPitching = statDictionary.war_pitching
     <h2>Settings</h2>
     <p>
       Want to change how the site looks? Background color, text color, and font are all
-      adjustable on the <RouterLink to="/settings">Settings page</RouterLink>.
+      adjustable on the <RouterLink to="/settings" data-umami-event="Settings">Settings page</RouterLink>.
     </p>
   </div>
 
