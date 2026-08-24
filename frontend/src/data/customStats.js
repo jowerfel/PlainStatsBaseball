@@ -52,15 +52,7 @@ export const CUSTOM_STATS = [
     format: 'decimal3',
     shortExplain: 'A custom weighted slugging stat.',
   },
-  {
-    key: 'Wslg',
-    name: 'Wslg',
-    group: 'hitting',
-    formula: '(1B*0.44 + 2B*0.72 + 3B*1.02 + HR*1.38) / AB',
-    goodDirection: 'high',
-    format: 'decimal3',
-    shortExplain: 'A custom weighted slugging stat.',
-  },
+  
 ]
 
 // Custom stats are registered into statDictionary as soon as this module is imported, so
