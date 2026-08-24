@@ -2,8 +2,8 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getLeaderboard } from '@/services/mlbApi.js'
-import { getStatsByGroup, formatValueAs } from '@/data/statDictionary.js'
-import { getCustomStatsByGroup, getCustomStat, isCustomStatKey, computeCustomStat } from '@/data/customStats.js'
+import { getStatsByGroup } from '@/data/statDictionary.js'
+import { isCustomStatKey, computeCustomStat, getCustomStat } from '@/data/customStats.js'
 import StatTable from '@/components/StatTable.vue'
 
 const route = useRoute()
@@ -22,8 +22,11 @@ const season = ref(
     : String(new Date().getFullYear()),
 )
 
-const availableStats = computed(() => getStatsByGroup(group.value))
-const availableCustomStats = computed(() => getCustomStatsByGroup(group.value))
+// includeCustom: true blends custom stats (data/customStats.js) into this same list —
+// they show up as ordinary checkboxes right alongside AVG/OPS/etc., with their formula as
+// the hover description via StatTooltip (see registerCustomStats in statDictionary.js).
+// No separate "custom stats" section — they're just stats.
+const availableStats = computed(() => getStatsByGroup(group.value, { includeCustom: true }))
 
 const rows = ref([])
 const loading = ref(false)
@@ -43,40 +46,26 @@ function toggleStat(key) {
   }
 }
 
-// Custom stats have no statDictionary entry, so they're marked isStat: false (skips
-// StatTable's dictionary-driven formatting/quality-dot logic) but still get a real
-// simpleName label and a pre-formatted display value, computed below.
+// Every selected stat is a normal isStat: true column now — custom stats are registered
+// into statDictionary (see registerCustomStats), so StatTable's usual formatting and
+// StatTooltip lookup work on them exactly like any real stat, no special-casing needed here.
 const columns = computed(() => [
   { key: 'playerName', label: 'Player', isStat: false, link: (row) => `/players/${row.id}` },
   { key: 'teamName', label: 'Team', isStat: false },
-  ...selectedStats.value.map((key) => {
-    const customDef = isCustomStatKey(key) ? getCustomStat(key) : null
-    return {
-      key,
-      isStat: !customDef,
-      label: customDef ? customDef.name : key,
-    }
-  }),
+  ...selectedStats.value.map((key) => ({ key, isStat: true })),
 ])
 
 // Custom stats aren't returned by the backend (it doesn't know the formulas) — they're
 // computed here, client-side, from the same raw `stat` object the backend already sends
 // for every row (which includes the base fields like AB/H/2B/3B/HR/etc. formulas need).
-// Custom values are pre-formatted into display strings since they skip StatTable's
-// dictionary-driven number formatting (isStat: false above); numeric sort still works off
-// the raw number kept in `<key>_raw`.
+// The numeric value is stored under the stat's own key so StatTable's normal formatting
+// path (formatStatValue, keyed off statDictionary) handles display — no pre-formatting
+// or separate raw/display fields required now that custom stats are registered stats.
 const tableRows = computed(() =>
   rows.value.map((r) => {
     const row = { id: r.playerId, playerName: r.playerName, teamName: r.teamName }
     for (const key of selectedStats.value) {
-      if (isCustomStatKey(key)) {
-        const def = getCustomStat(key)
-        const raw = computeCustomStat(def, r.stat)
-        row[key] = raw === null ? '—' : formatValueAs(def.format || 'decimal3', raw)
-        row[`${key}_raw`] = raw
-      } else {
-        row[key] = r.stat?.[key]
-      }
+      row[key] = isCustomStatKey(key) ? computeCustomStat(getCustomStat(key), r.stat) : r.stat?.[key]
     }
     return row
   }),
@@ -86,11 +75,11 @@ const tableRows = computed(() =>
 // active sort is a custom stat, sort the already-fetched rows here instead of re-querying.
 const displayRows = computed(() => {
   if (!activeSortStat.value || !isCustomStatKey(activeSortStat.value)) return tableRows.value
-  const rawKey = `${activeSortStat.value}_raw`
+  const key = activeSortStat.value
   const dir = activeSortDir.value === 'asc' ? 1 : -1
   return [...tableRows.value].sort((a, b) => {
-    const av = a[rawKey]
-    const bv = b[rawKey]
+    const av = a[key]
+    const bv = b[key]
     if (av === null || av === undefined) return 1
     if (bv === null || bv === undefined) return -1
     return (av - bv) * dir
@@ -105,9 +94,10 @@ const displayRows = computed(() => {
 // the leaderboard sorting bug). Re-running the search against the backend with the newly
 // clicked stat as sortStat gets the real top-N for that stat instead — UNLESS the clicked
 // stat is a custom one, which the backend doesn't know how to sort by; that case just
-// re-sorts the rows already on screen (see displayRows above).
+// re-sorts the rows already on screen (see displayRows above). Custom stat columns are
+// clickable exactly the same way real ones are (both isStat: true now) — this used to bail
+// out early for custom stats (`if (!col.isStat) return`), which was the sort-click bug.
 function onSortRequested(col) {
-  if (!col.isStat) return
   if (activeSortStat.value === col.key) {
     activeSortDir.value = activeSortDir.value === 'desc' ? 'asc' : 'desc'
   } else {
@@ -203,6 +193,11 @@ if (route.query.stats) {
 
     <fieldset>
       <legend>Stats to show</legend>
+      <p class="muted" style="margin: 0 0 6px 0;">
+        Hover any stat's name to see what it means — including custom ones. Want to add
+        your own? Edit <code>frontend/src/data/customStats.js</code>, just a name and a
+        formula, nothing else to touch.
+      </p>
       <label v-for="s in availableStats" :key="s.key" class="checkbox-row">
         <input
           type="checkbox"
@@ -211,23 +206,6 @@ if (route.query.stats) {
         />
         {{ s.simpleName }}
       </label>
-    </fieldset>
-
-    <fieldset v-if="availableCustomStats.length">
-      <legend>Custom stats</legend>
-      <label v-for="s in availableCustomStats" :key="s.key" class="checkbox-row">
-        <input
-          type="checkbox"
-          :checked="selectedStats.includes(s.key)"
-          @change="toggleStat(s.key)"
-        />
-        {{ s.name }}
-        <span class="muted">— {{ s.formula }}</span>
-      </label>
-      <p class="muted" style="margin: 4px 0 0 0;">
-        Want to add your own? Edit <code>frontend/src/data/customStats.js</code> — just a
-        name and a formula, no other code to touch.
-      </p>
     </fieldset>
 
     <fieldset>

@@ -40,6 +40,8 @@
 // using the site, for both season and career leaderboards. Per the design of this feature,
 // they are NOT shown on individual player profile pages — leaderboards only.
 
+import { registerCustomStats } from './statDictionary.js'
+
 export const CUSTOM_STATS = [
   {
     key: 'wSlug',
@@ -48,18 +50,26 @@ export const CUSTOM_STATS = [
     formula: '(1B*0.44 + 2B*0.72 + 3B*1.02 + HR*1.38) / AB',
     goodDirection: 'high',
     format: 'decimal3',
-    shortExplain: 'A custom weighted slugging stat — an example custom stat. Edit frontend/src/data/customStats.js to change or add more.',
+    shortExplain: 'A custom weighted slugging stat.',
   },
   {
-    key: 'wSlug w/ BB',
-    name: 'wSlug w/ BB',
+    key: 'Wslg',
+    name: 'Wslg',
     group: 'hitting',
-    formula: '(1B*0.44 + 2B*0.72 + 3B*1.02 + HR*1.38 + BB*0.29 + HBP*0.32) / PA',
+    formula: '(1B*0.44 + 2B*0.72 + 3B*1.02 + HR*1.38) / AB',
     goodDirection: 'high',
     format: 'decimal3',
-    shortExplain: 'A custom weighted slugging stat — an example custom stat. Edit frontend/src/data/customStats.js to change or add more.',
+    shortExplain: 'A custom weighted slugging stat.',
   },
 ]
+
+// Custom stats are registered into statDictionary as soon as this module is imported, so
+// they behave exactly like any other stat everywhere in the app — checkbox lists, header
+// hover tooltips (with their formula shown as the description), cell formatting — with no
+// separate "custom stats" section or special-cased rendering anywhere. Leaderboard sorting
+// still needs a formula to compute the value with (statDictionary only knows how to
+// *format* a value, not calculate one), which is what computeCustomStat below is for.
+registerCustomStats(CUSTOM_STATS)
 
 // --- variable maps: formula variable name -> raw stat field returned by the backend -----
 // Hitting rows come from /api/leaderboard and /api/players/:id (both merge in `singles`

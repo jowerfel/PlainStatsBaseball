@@ -478,7 +478,7 @@ export function formatStatValue(statKey, value) {
 // Returns 'poor' | 'average' | 'great' (or null if we can't judge it / no def exists)
 export function getStatQuality(statKey, value) {
   const def = statDictionary[statKey]
-  if (!def || value === null || value === undefined || Number.isNaN(value)) return null
+  if (!def || !def.scale || value === null || value === undefined || Number.isNaN(value)) return null
   const { poor, average, great } = def.scale
   const num = Number(value)
 
@@ -493,10 +493,39 @@ export function getStatQuality(statKey, value) {
   }
 }
 
-export function getStatsByGroup(group) {
+// By default, excludes custom stats (see registerCustomStats below) — player profile
+// pages, the comparison view, and the homepage should only ever show real, fetched stats.
+// Pass includeCustom: true (only the Custom Leaderboard Builder does) to get custom stats
+// blended in alongside the real ones, indistinguishable except for their `custom: true` flag.
+export function getStatsByGroup(group, { includeCustom = false } = {}) {
   return Object.entries(statDictionary)
-    .filter(([, def]) => def.group === group)
+    .filter(([, def]) => def.group === group && (includeCustom || !def.custom))
     .map(([key, def]) => ({ key, ...def }))
+}
+
+// Registers custom stats (see data/customStats.js) into this dictionary so they behave
+// like any other stat everywhere in the app — same checkbox list, same StatTooltip hover
+// description, same header, same cell formatting — with zero special-casing needed in
+// StatTable, StatTooltip, or anywhere else that already reads from statDictionary. Takes
+// customStats as a param (rather than importing data/customStats.js directly) to avoid a
+// circular import between the two data files; called once, from customStats.js itself,
+// when that module loads.
+export function registerCustomStats(customStats) {
+  for (const s of customStats) {
+    statDictionary[s.key] = {
+      realName: s.name,
+      simpleName: s.name,
+      fullName: s.name,
+      shortExplain: `Custom stat: ${s.formula}`,
+      extraExplain: 'Defined in frontend/src/data/customStats.js — edit that file to change or add more.',
+      goodDirection: s.goodDirection || 'high',
+      // No `scale` — custom stats don't get a poor/average/great quality dot, since we
+      // have no basis for those thresholds on a formula the site didn't design.
+      format: s.format || 'decimal3',
+      group: s.group,
+      custom: true,
+    }
+  }
 }
 
 // Formats a value using an explicit format string, for callers (like custom stats) that
