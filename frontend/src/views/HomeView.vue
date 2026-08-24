@@ -39,7 +39,7 @@ const popularPitching = getStatsByGroup('pitching').slice(0, 5)
     <div class="layout-sidebar">
       <h3>More</h3>
       <ul class="text-links-list">
-        <li><RouterLink to="/leaderboards/custom"> data-umami-event="Leaderboards"Build a custom leaderboard</RouterLink></li>
+        <li><RouterLink to="/leaderboards/custom" data-umami-event="Leaderboards">Build a custom leaderboard</RouterLink></li>
         <li><RouterLink to="/pitchers" data-umami-event="Following">Following</RouterLink></li>
         <li><RouterLink to="/live" data-umami-event="Live">Live games</RouterLink></li>
         <li><RouterLink to="/about" data-umami-event="About">About this site</RouterLink></li>
