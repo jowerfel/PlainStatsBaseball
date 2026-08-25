@@ -17,6 +17,7 @@ const router = useRouter()
 const player = ref(null)
 const hittingStats = ref(null)
 const pitchingStats = ref(null)
+const fieldingStats = ref(null)
 const gameLog = ref([])
 const yearByYear = ref([])
 const yearByYearLoading = ref(false)
@@ -35,27 +36,31 @@ const defaultGroup = computed(() => (player.value?.primaryPosition?.code === '1'
 // combining what used to be a separate "season stats" page, "career stats" page, and an
 // implicit hitting-or-pitching split into one page with two toggles, so there's one place
 // for all of a player's stats instead of scattered views.
-const selectedGroup = ref(route.query.group === 'pitching' || route.query.group === 'hitting'
-  ? route.query.group
-  : null) // null = not yet decided, falls back to defaultGroup once the player loads
+const VALID_GROUPS = ['hitting', 'pitching', 'fielding']
+const selectedGroup = ref(VALID_GROUPS.includes(route.query.group) ? route.query.group : null) // null = not yet decided, falls back to defaultGroup once the player loads
 const selectedSeason = computed(() =>
   route.query.season ? String(route.query.season) : String(new Date().getFullYear()),
 )
 const isCareer = computed(() => selectedSeason.value === 'career')
 
 const activeGroup = computed(() => selectedGroup.value || defaultGroup.value)
-const activeStats = computed(() => (activeGroup.value === 'pitching' ? pitchingStats.value : hittingStats.value))
+const activeStats = computed(() => {
+  if (activeGroup.value === 'pitching') return pitchingStats.value
+  if (activeGroup.value === 'fielding') return fieldingStats.value
+  return hittingStats.value
+})
 
 // Whether the player has any usable stats at all in a group, independent of which group
 // is currently selected — drives the "try the other group" hint when one is empty.
 const hasHitting = computed(() => !!hittingStats.value)
 const hasPitching = computed(() => !!pitchingStats.value)
+const hasFielding = computed(() => !!fieldingStats.value)
 
-const glanceKeys = computed(() =>
-  activeGroup.value === 'pitching'
-    ? ['era', 'whip', 'inningsPitched', 'strikeOuts', 'war_pitching']
-    : ['avg', 'obp', 'ops', 'homeRuns', 'war'],
-)
+const glanceKeys = computed(() => {
+  if (activeGroup.value === 'pitching') return ['era', 'whip', 'inningsPitched', 'strikeOuts', 'war_pitching']
+  if (activeGroup.value === 'fielding') return ['fielding', 'putOuts', 'assists', 'errors', 'rangeFactor']
+  return ['avg', 'obp', 'ops', 'homeRuns', 'war']
+})
 
 const fullStatColumns = computed(() => getStatsByGroup(activeGroup.value))
 
@@ -69,7 +74,7 @@ function setGroup(group) {
   selectedGroup.value = group
   router.replace({ query: { ...route.query, group } })
   // activeGroup only affects the game-log/year-by-year fetch (the player object itself
-  // already carries both hitting and pitching stats), and that read happens after an
+  // already carries hitting, pitching, AND fielding stats), and that read happens after an
   // `await` inside load() — outside watchEffect's synchronous tracking window — so the
   // switch needs to be re-triggered explicitly rather than relying on reactivity.
   loadYearByYear(group)
@@ -95,10 +100,13 @@ async function load() {
     player.value = data.player
     hittingStats.value = data.hittingSeasonStats
     pitchingStats.value = data.pitchingSeasonStats
+    fieldingStats.value = data.fieldingSeasonStats
 
     const group = activeGroup.value
 
-    if (!isCareer.value) {
+    // Fielding has no game log endpoint yet (see loadGameLog) — only fetch one for
+    // hitting/pitching, where the backend actually supports it.
+    if (!isCareer.value && group !== 'fielding') {
       await loadGameLog(group)
     } else {
       gameLog.value = []
@@ -113,6 +121,13 @@ async function load() {
 }
 
 async function loadGameLog(group) {
+  // The backend's /gamelog route only supports hitting/pitching stat groups today —
+  // calling it with group=fielding would just 502 or return hitting data by default, so
+  // this is skipped for fielding rather than showing wrong or broken data (see load()).
+  if (group === 'fielding') {
+    gameLog.value = []
+    return
+  }
   try {
     const logData = await getPlayerGameLog(props.playerId, {
       season: selectedSeason.value,
@@ -201,7 +216,7 @@ function formatOpponent(opponent) {
          switch — this is the actual fix for not being able to see Ohtani's pitching stats
          or an old pitcher's hitting stats. -->
     <div class="section" style="display: flex; gap: 24px; flex-wrap: wrap;">
-      <div v-if="hasHitting || hasPitching">
+      <div v-if="hasHitting || hasPitching || hasFielding">
         <strong class="muted" style="font-size: 12px;">Stats:</strong>
         <label class="checkbox-row" style="display: inline; margin-right: 10px;">
           <input
@@ -212,7 +227,7 @@ function formatOpponent(opponent) {
           />
           Hitting
         </label>
-        <label class="checkbox-row" style="display: inline;">
+        <label class="checkbox-row" style="display: inline; margin-right: 10px;">
           <input
             type="radio"
             value="pitching"
@@ -220,6 +235,15 @@ function formatOpponent(opponent) {
             @change="setGroup('pitching')"
           />
           Pitching
+        </label>
+        <label class="checkbox-row" style="display: inline;">
+          <input
+            type="radio"
+            value="fielding"
+            :checked="activeGroup === 'fielding'"
+            @change="setGroup('fielding')"
+          />
+          Fielding
         </label>
       </div>
       <div>
@@ -239,11 +263,14 @@ function formatOpponent(opponent) {
       <h2>{{ isCareer ? 'Career' : 'This season' }} At A Glance ({{ activeGroup }})</h2>
       <p v-if="!activeStats" class="muted">
         No {{ activeGroup }} stats available for this timeframe.
-        <template v-if="activeGroup === 'hitting' && hasPitching">
+        <template v-if="activeGroup !== 'hitting' && hasHitting">
+          Try <a href="#" @click.prevent="setGroup('hitting')">hitting stats</a> instead.
+        </template>
+        <template v-if="activeGroup !== 'pitching' && hasPitching">
           Try <a href="#" @click.prevent="setGroup('pitching')">pitching stats</a> instead.
         </template>
-        <template v-else-if="activeGroup === 'pitching' && hasHitting">
-          Try <a href="#" @click.prevent="setGroup('hitting')">hitting stats</a> instead.
+        <template v-if="activeGroup !== 'fielding' && hasFielding">
+          Try <a href="#" @click.prevent="setGroup('fielding')">fielding stats</a> instead.
         </template>
       </p>
       <div v-else style="display: flex; gap: 20px; flex-wrap: wrap;">
@@ -304,7 +331,11 @@ function formatOpponent(opponent) {
       />
     </div>
 
-    <div class="section" v-if="!isCareer">
+    <div v-if="!isCareer && activeGroup === 'fielding'" class="section">
+      <p class="muted">Game-by-game fielding logs aren't available yet — season and career totals are above.</p>
+    </div>
+
+    <div class="section" v-if="!isCareer && activeGroup !== 'fielding'">
       <h2>Game Log (last {{ gameLog.length }})</h2>
       <p v-if="gameLog.length === 0" class="muted">No recent games found.</p>
       <div v-else class="table-scroll">

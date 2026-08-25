@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
-import { deriveSingles, attachWar } from '../derivedStats.js'
+import { deriveSingles, deriveSplat, deriveRangeFactor, attachWar } from '../derivedStats.js'
 
 const router = Router()
 
@@ -30,12 +30,13 @@ const POOL_SIZE = 3000
 
 router.get('/', async (req, res) => {
   const season = req.query.season || new Date().getFullYear()
-  const group = req.query.group === 'pitching' ? 'pitching' : 'hitting'
+  const group = ['pitching', 'fielding'].includes(req.query.group) ? req.query.group : 'hitting'
   const limit = Math.min(Number(req.query.limit) || 100, POOL_SIZE)
   const statKeys = (req.query.stats || '').split(',').filter(Boolean)
   const sortStat = statKeys.includes(req.query.sortStat) ? req.query.sortStat : statKeys[0]
   const minPA = req.query.minPA ? Number(req.query.minPA) : null
   const minIP = req.query.minIP ? Number(req.query.minIP) : null
+  const minInnings = req.query.minInnings ? Number(req.query.minInnings) : null
 
   try {
     const cacheKey = `leaderboard:${group}:${season}:${POOL_SIZE}`
@@ -59,11 +60,18 @@ router.get('/', async (req, res) => {
     if (minIP !== null) {
       rows = rows.filter((r) => Number(r.stat?.inningsPitched || 0) >= minIP)
     }
+    if (minInnings !== null) {
+      // Fielding's own innings-played field, reported the same "whole.thirds" way as
+      // pitching IP (see inningsPitchedToDecimal in derivedStats.js) — compared as a
+      // plain string-prefix number here since a minimum-innings filter only needs to be
+      // roughly right, not innings-and-thirds precise.
+      rows = rows.filter((r) => Number(r.stat?.innings || 0) >= minInnings)
+    }
 
     // Always sort the FULL filtered pool by the active stat, not just the slice we're about
     // to return — see the note above for why sorting after truncation is the bug.
     if (sortStat && rows.some((r) => r.stat?.[sortStat] !== undefined)) {
-      const ascending = ['era', 'whip', 'bb_pct'].includes(sortStat)
+      const ascending = ['era', 'whip', 'bb_pct', 'errors'].includes(sortStat)
       rows.sort((a, b) => {
         const aValue = Number(a.stat?.[sortStat] ?? 0)
         const bValue = Number(b.stat?.[sortStat] ?? 0)
@@ -89,10 +97,23 @@ router.get('/', async (req, res) => {
 
 function withDerivedStats(stat = {}, group) {
   const merged = { ...stat }
+
+  if (group === 'fielding') {
+    // putOuts, assists, errors, chances, and fielding% (as `fielding`) already come
+    // straight from the MLB API. caughtStealing/stolenBases mean something different here
+    // than in the hitting group (see the parallel comment in routes/players.js), so they're
+    // aliased to distinct keys to avoid colliding in statDictionary's flat key space.
+    if (merged.caughtStealing !== undefined) merged.fieldingCaughtStealing = merged.caughtStealing
+    if (merged.stolenBases !== undefined) merged.fieldingStolenBases = merged.stolenBases
+    merged.rangeFactor = deriveRangeFactor(merged)
+    return merged
+  }
+
   if (group !== 'pitching') {
-    // Same singles derivation as routes/players.js — kept in sync so custom formulas
-    // relying on 1B behave the same in leaderboards as they do on a player's own page.
+    // Same singles/SPLAT derivation as routes/players.js — kept in sync so custom
+    // formulas and SPLAT behave the same in leaderboards as they do on a player's own page.
     merged.singles = deriveSingles(merged)
+    merged.splat = deriveSplat(merged)
     attachWar(merged, 'hitting')
     return merged
   }

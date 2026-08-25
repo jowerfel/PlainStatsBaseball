@@ -17,6 +17,14 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
+      // Uploaded article PDFs are served as static files straight off the backend root
+      // (see backend/index.js's express.static + articlesStore.js's ARTICLES_UPLOAD_DIR),
+      // not under /api — needs its own proxy rule in dev so PDF links resolve the same
+      // way they will in prod (same-origin or VITE_API_URL's host).
+      '/articles': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
 })

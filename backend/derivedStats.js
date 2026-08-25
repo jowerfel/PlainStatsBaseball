@@ -82,7 +82,41 @@ export function computePitcherWar(stat) {
   return raw / 10
 }
 
-// Computes and attaches WAR to a stat object in place. Hitting stats get `war` (matching
+// SPLAT ("Swing Produces Lazy Air Trajectory") = pop ups / AB, per Joshua's spec.
+//
+// IMPORTANT CAVEAT: the MLB Stats API's hitting stat object has no "pop ups" or "pop
+// flies" field at all — it only splits batted-ball outs into two buckets, `groundOuts`
+// and `airOuts` (every fly ball, line drive, and pop-up out together). Per-batted-ball-type
+// breakdowns (pop up vs. regular fly ball vs. line drive) are a Statcast/Baseball Savant
+// metric, a separate, much heavier API this site doesn't currently integrate with, and even
+// there it's tracked per pitch/launch angle rather than as a simple season total field.
+//
+// Until/unless that's wired in, SPLAT is computed here as airOuts / AB — the closest real
+// substitute available (pop-ups are a subset of air outs), not a like-for-like pop-up
+// count. This is flagged clearly in the stat's own description on the site (see
+// statDictionary.js) so it's never presented as more precise than it is.
+export function deriveSplat(stat) {
+  const airOuts = Number(stat.airOuts || 0)
+  const atBats = Number(stat.atBats || 0)
+  if (atBats === 0) return null
+  return airOuts / atBats
+}
+
+// Fielding derived stats. The MLB Stats API's fielding stat object already reports
+// putOuts, assists, errors, chances, and fielding% (as `fielding`, a string like ".987")
+// directly — nothing to derive there. rangeFactor (a classic sabermetric fielding stat,
+// (putouts + assists) per 9 innings) isn't provided by the API, so it's derived here for
+// anyone who wants a rate stat instead of raw counts; `innings` on a fielding stat object
+// is reported the same "whole.thirds" way as pitching IP, so it reuses that conversion.
+export function deriveRangeFactor(stat) {
+  const putOuts = Number(stat.putOuts || 0)
+  const assists = Number(stat.assists || 0)
+  const innings = inningsPitchedToDecimal(stat.innings)
+  if (innings === 0) return null
+  return ((putOuts + assists) / innings) * 9
+}
+
+
 // statDictionary.js's `war` entry). Pitching stats get `war_pitching` (matching
 // statDictionary.js's `war_pitching` entry) — every view reads stats by looking up
 // `row[col.key]` directly against the stat object, so the field has to exist under the

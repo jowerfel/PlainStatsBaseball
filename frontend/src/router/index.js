@@ -12,6 +12,7 @@ import LiveGamesView from '@/views/LiveGamesView.vue'
 import StandingsView from '@/views/StandingsView.vue'
 import AboutView from '@/views/AboutView.vue'
 import SettingsView from '@/views/SettingsView.vue'
+import ArticlesView from '@/views/ArticlesView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -28,6 +29,7 @@ const router = createRouter({
     { path: '/standings', name: 'standings', component: StandingsView },
     { path: '/about', name: 'about', component: AboutView },
     { path: '/settings', name: 'settings', component: SettingsView },
+    { path: '/articles', name: 'articles', component: ArticlesView },
   ],
 })
 

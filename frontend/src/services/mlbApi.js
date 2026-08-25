@@ -4,8 +4,47 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
+// Uploaded PDFs are served as static files directly off the backend root (e.g.
+// /articles/xyz.pdf), NOT under /api — API_BASE typically ends in "/api", so this strips
+// that off to get the backend's root origin for building a full, fetchable PDF link.
+// Falls back to API_BASE itself if it doesn't end in "/api" (unexpected config), which is
+// still more useful than a broken relative link.
+const BACKEND_ROOT = API_BASE.endsWith('/api') ? API_BASE.slice(0, -'/api'.length) : API_BASE
+
+export function resolveArticlePdfUrl(pdfUrl) {
+  return `${BACKEND_ROOT}${pdfUrl}`
+}
+
 async function apiGet(path) {
   const res = await fetch(`${API_BASE}${path}`)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(data.message || data.error || `Request failed (${res.status})`)
+    err.status = res.status
+    err.body = data
+    throw err
+  }
+  return data
+}
+
+// Plain JSON-body POST (no request body needed for like/view — those are just an action).
+async function apiPost(path) {
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(data.message || data.error || `Request failed (${res.status})`)
+    err.status = res.status
+    err.body = data
+    throw err
+  }
+  return data
+}
+
+// Multipart form upload (for the PDF article upload) — deliberately NOT using apiPost/
+// apiGet's JSON handling, since a file upload needs FormData with no Content-Type header
+// set manually (the browser sets the multipart boundary itself).
+async function apiUpload(path, formData) {
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', body: formData })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     const err = new Error(data.message || data.error || `Request failed (${res.status})`)
@@ -70,4 +109,27 @@ export function getStandings(season) {
 
 export function getHealth() {
   return apiGet('/health')
+}
+
+export function getArticles() {
+  return apiGet('/articles')
+}
+
+export function getArticle(articleId) {
+  return apiGet(`/articles/${articleId}`)
+}
+
+export function uploadArticle({ title, file }) {
+  const formData = new FormData()
+  formData.set('title', title)
+  formData.set('pdf', file)
+  return apiUpload('/articles', formData)
+}
+
+export function likeArticle(articleId) {
+  return apiPost(`/articles/${articleId}/like`)
+}
+
+export function recordArticleView(articleId) {
+  return apiPost(`/articles/${articleId}/view`)
 }

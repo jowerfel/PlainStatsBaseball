@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
-import { deriveSingles, attachWar } from '../derivedStats.js'
+import { deriveSingles, deriveSplat, deriveRangeFactor, attachWar } from '../derivedStats.js'
 
 const router = Router()
 
@@ -88,7 +88,7 @@ router.get('/:id', async (req, res) => {
   const season = req.query.season || new Date().getFullYear()
 
   try {
-    const [person, hittingSeason, pitchingSeason] = await Promise.all([
+    const [person, hittingSeason, pitchingSeason, fieldingSeason] = await Promise.all([
       cached(`person:${personId}`, 10 * 60 * 1000, () =>
         mlb.getPerson(personId, 'currentTeam'),
       ),
@@ -97,6 +97,9 @@ router.get('/:id', async (req, res) => {
       ),
       cached(`season-pitching:${personId}:${season}`, 5 * 60 * 1000, () =>
         mlb.getPersonSeasonStats(personId, season, 'pitching').catch(() => null),
+      ),
+      cached(`season-fielding:${personId}:${season}`, 5 * 60 * 1000, () =>
+        mlb.getPersonSeasonStats(personId, season, 'fielding').catch(() => null),
       ),
     ])
 
@@ -117,11 +120,18 @@ router.get('/:id', async (req, res) => {
       personId,
       season,
     )
+    const fieldingStats = mergeDerivedStats(
+      extractSeasonSplit(fieldingSeason),
+      'fielding',
+      personId,
+      season,
+    )
 
     res.json({
       player,
       hittingSeasonStats: hittingStats,
       pitchingSeasonStats: pitchingStats,
+      fieldingSeasonStats: fieldingStats,
     })
   } catch (err) {
     console.error('players/:id failed:', err.message)
@@ -132,7 +142,7 @@ router.get('/:id', async (req, res) => {
 // GET /api/players/:id/year-by-year?group=hitting
 router.get('/:id/year-by-year', async (req, res) => {
   const personId = req.params.id
-  const group = req.query.group === 'pitching' ? 'pitching' : 'hitting'
+  const group = ['pitching', 'fielding'].includes(req.query.group) ? req.query.group : 'hitting'
 
   try {
     const data = await cached(
@@ -191,20 +201,30 @@ function mergeDerivedStats(stats, group, personId, season) {
     // the natural base unit for custom hitting formulas (e.g. a weighted slugging), so
     // it's derived here once and passed straight through everywhere hitting stats flow.
     merged.singles = deriveSingles(merged)
-  } else {
+    // SPLAT ("Swing Produces Lazy Air Trajectory") — see the big caveat comment on
+    // deriveSplat in derivedStats.js: this is airOuts/AB, the closest real substitute for
+    // a genuine pop-up count, which the MLB Stats API doesn't provide.
+    merged.splat = deriveSplat(merged)
+    attachWar(merged, 'hitting')
+  } else if (group === 'pitching') {
     const battersFaced = Number(merged.battersFaced || 0)
     if (battersFaced > 0) {
       merged.k_pct = (Number(merged.strikeOuts || 0) / battersFaced) * 100
       merged.bb_pct = (Number(merged.baseOnBalls || 0) / battersFaced) * 100
     }
     merged.baseOnBallsPitching = merged.baseOnBalls
+    attachWar(merged, 'pitching')
+  } else if (group === 'fielding') {
+    // putOuts, assists, errors, chances, and fielding% (as `fielding`, a string like
+    // ".987") already come straight from the MLB API. caughtStealing/stolenBases on a
+    // fielding stat object mean something different than the hitting group's own fields
+    // of the same name (a catcher's caught-stealing defense, not the fielder's own base-
+    // stealing) — aliased to distinct keys so they don't collide in statDictionary's flat
+    // key space (see the fielding section comment there).
+    if (merged.caughtStealing !== undefined) merged.fieldingCaughtStealing = merged.caughtStealing
+    if (merged.stolenBases !== undefined) merged.fieldingStolenBases = merged.stolenBases
+    merged.rangeFactor = deriveRangeFactor(merged)
   }
-
-  // WAR isn't published by the MLB Stats API at all — attachWar computes Joshua's own
-  // custom WAR formula (see derivedStats.js) and sets `merged.war` (hitting) or
-  // `merged.war_pitching` (pitching), covering this player's page, year-by-year, career,
-  // and leaderboards from one shared implementation.
-  attachWar(merged, group)
 
   return merged
 }
