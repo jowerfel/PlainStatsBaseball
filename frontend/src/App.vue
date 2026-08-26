@@ -48,7 +48,8 @@ function dismissNotice() {
         <RouterLink to="/standings" data-umami-event="Standings">Standings</RouterLink>
         <span class="nav-sep">|</span>
         <RouterLink to="/about" data-umami-event="About">About</RouterLink>
-        
+        <span class="nav-sep">|</span>
+        <RouterLink to="/articles">Articles</RouterLink>
       </nav>
     </div>
   </header>

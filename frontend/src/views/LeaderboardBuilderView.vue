@@ -194,9 +194,7 @@ if (route.query.stats) {
     <fieldset>
       <legend>Stats to show</legend>
       <p class="muted" style="margin: 0 0 6px 0;">
-        Hover any stat's name to see what it means — including custom ones. Want to add
-        your own? Edit <code>frontend/src/data/customStats.js</code>, just a name and a
-        formula, nothing else to touch.
+        Hover any stat's name to see what it means.
       </p>
       <label v-for="s in availableStats" :key="s.key" class="checkbox-row">
         <input

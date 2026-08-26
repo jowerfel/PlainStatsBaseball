@@ -21,7 +21,7 @@ const jwarPitching = statDictionary.war_pitching
     <h2>Settings</h2>
     <p>
       Want to change how the site looks? Background color, text color, and font are all
-      adjustable on the <RouterLink to="/settings" data-umami-event="Settings">Settings page</RouterLink>.
+      adjustable on the <RouterLink to="/settings">Settings page</RouterLink>.
     </p>
   </div>
 
@@ -29,8 +29,6 @@ const jwarPitching = statDictionary.war_pitching
     <h2>Custom stats</h2>
     <p class="muted">
       These aren't official MLB stats — they're formulas built specifically for this site.
-      They're editable in the codebase (<code>frontend/src/data/customStats.js</code> for
-      formula-style stats, <code>backend/derivedStats.js</code> for JWins).
     </p>
 
     <h3>{{ jwarHitting.simpleName }} (hitters)</h3>
