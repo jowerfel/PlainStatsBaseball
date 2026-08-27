@@ -116,14 +116,106 @@ export function deriveRangeFactor(stat) {
   return ((putOuts + assists) / innings) * 9
 }
 
+// Fielding is fundamentally different from hitting/pitching in one important way: a
+// player who appeared at more than one position in a season (or in one leaderboard
+// query) gets ONE SPLIT PER POSITION from the MLB Stats API, not a single combined row —
+// e.g. someone who played mostly right field but filled in at first base a few times gets
+// a split for RF and a separate split for 1B, each with only that position's own
+// counting stats. (Confirmed against real career fielding logs — a season with multiple
+// positions genuinely shows multiple rows, e.g. Barry Bonds's 1987 season broken into
+// RF/CF/LF splits, verified against real historical totals.) Hitting and pitching splits
+// are reliably a single row per season/team-stint, so grabbing the first split is safe
+// for them — but for fielding, blindly taking the first split (or, on a leaderboard,
+// treating every split as a separate player row) would silently show just one position's
+// partial stats, or duplicate a multi-position player across several leaderboard rows,
+// instead of one real combined total. Used by both routes/players.js (a single player's
+// season/year-by-year fielding) and routes/leaderboards.js (every player's fielding row
+// on a leaderboard), so the combining logic can't drift between the two.
+//
+// Sums the counting stats across every split into one combined total. Counting stats add
+// up directly; innings (reported "whole.thirds" like pitching IP, e.g. "63.1" = 63 and
+// 1/3) are summed via the same thirds-aware conversion used elsewhere in this file, then
+// converted back to that same "whole.thirds" display string so it still reads the way
+// every other innings figure on this site does; fielding % is recomputed from summed
+// putouts+assists+chances rather than averaged, since averaging percentages from unequal
+// sample sizes (e.g. 300 chances at one position, 5 at another) would misrepresent the
+// real combined rate.
+export function sumFieldingStats(statObjects) {
+  const sum = (key) => statObjects.reduce((total, s) => total + Number(s?.[key] || 0), 0)
 
-// statDictionary.js's `war` entry). Pitching stats get `war_pitching` (matching
-// statDictionary.js's `war_pitching` entry) — every view reads stats by looking up
-// `row[col.key]` directly against the stat object, so the field has to exist under the
-// exact key the dictionary entry uses; the dictionary's `sourceKey: 'war'` metadata on
-// war_pitching is not actually read anywhere, so it can't do that aliasing on its own.
-// Returns null (not 0) when the underlying counting stats are all missing, e.g. an empty/
-// partial stat line, rather than reporting a fabricated 0.0 WAR for a player with no data.
+  const putOuts = sum('putOuts')
+  const assists = sum('assists')
+  const errors = sum('errors')
+  const chances = sum('chances') || putOuts + assists + errors
+  const games = sum('games')
+  const gamesStarted = sum('gamesStarted')
+  const doublePlays = sum('doublePlays')
+  const caughtStealing = sum('caughtStealing')
+  const stolenBases = sum('stolenBases')
+  const passedBall = sum('passedBall')
+
+  const totalInningsDecimal = statObjects.reduce(
+    (total, s) => total + inningsPitchedToDecimal(s?.innings),
+    0,
+  )
+
+  const fieldingPct = chances > 0 ? (putOuts + assists) / chances : null
+
+  return {
+    putOuts,
+    assists,
+    errors,
+    chances,
+    games,
+    gamesStarted,
+    doublePlays,
+    caughtStealing,
+    stolenBases,
+    passedBall,
+    innings: decimalToInningsWholeThirds(totalInningsDecimal),
+    // Matches the MLB API's own string format for fielding % (e.g. ".987", no leading
+    // zero) so downstream formatting (which treats this as a string, same as the raw API
+    // response) doesn't need a separate code path for the summed case vs. the single-
+    // split case.
+    fielding: fieldingPct === null ? null : fieldingPct.toFixed(3).replace(/^0\./, '.'),
+  }
+}
+
+// Given a season response's raw `splits` array for a fielding stat request, returns one
+// combined stat object for that season — the real fix for extractSeasonSplit's old
+// splits[0]-only behavior when a player had multiple positions. If there's only one
+// split (the common case — most players stick to one position most seasons), it's
+// returned as-is with no summing needed.
+export function extractFieldingSeasonTotal(seasonResponse) {
+  if (!seasonResponse) return null
+  const splits = seasonResponse.stats?.[0]?.splits
+  if (!splits || splits.length === 0) return null
+  if (splits.length === 1) return splits[0].stat
+  return sumFieldingStats(splits.map((s) => s.stat))
+}
+
+// Reverses inningsPitchedToDecimal: 63.333... -> "63.1". Whole thirds only (0, 1, 2) are
+// valid in this format, so the fractional part is rounded to the nearest third rather
+// than carrying any floating-point remainder into the output string.
+function decimalToInningsWholeThirds(decimal) {
+  const whole = Math.floor(decimal)
+  const remainder = decimal - whole
+  const thirds = Math.round(remainder * 3)
+  // A rounded-up remainder of 3 thirds means it's actually a full extra inning.
+  if (thirds === 3) return `${whole + 1}.0`
+  return `${whole}.${thirds}`
+}
+
+
+// Computes and attaches WAR (displayed as "JWins") to a stat object in place. Hitting
+// stats get `war` (matching statDictionary.js's `war` entry). Pitching stats get
+// `war_pitching` (matching statDictionary.js's `war_pitching` entry) — every view reads
+// stats by looking up `row[col.key]` directly against the stat object, so the field has
+// to exist under the exact key the dictionary entry uses; the dictionary's `sourceKey:
+// 'war'` metadata on war_pitching is not actually read anywhere, so it can't do that
+// aliasing on its own. Returns null (not 0) when the underlying counting stats are all
+// missing, e.g. an empty/partial stat line, rather than reporting a fabricated 0.0 WAR
+// for a player with no data.
 export function attachWar(stat, group) {
   if (!stat) return stat
   const hasAnyInput =

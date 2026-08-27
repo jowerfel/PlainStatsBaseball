@@ -9,9 +9,9 @@ const MAX_PLAYERS = 4
 const route = useRoute()
 const router = useRouter()
 
-// slots: array of { playerId, fullName, player, hittingSeasonStats, pitchingSeasonStats, loading, error }
+// slots: array of { playerId, fullName, player, hittingSeasonStats, pitchingSeasonStats, fieldingSeasonStats, loading, error }
 const slots = ref([])
-const group = ref(route.query.group === 'pitching' ? 'pitching' : 'hitting')
+const group = ref(['pitching', 'fielding'].includes(route.query.group) ? route.query.group : 'hitting')
 const seasonType = ref(route.query.season === 'career' ? 'career' : 'season')
 const season = ref(
   route.query.season && String(route.query.season) !== 'career'
@@ -57,6 +57,7 @@ async function loadSlot(playerId) {
     slots.value[idx].player = data.player
     slots.value[idx].hittingSeasonStats = data.hittingSeasonStats
     slots.value[idx].pitchingSeasonStats = data.pitchingSeasonStats
+    slots.value[idx].fieldingSeasonStats = data.fieldingSeasonStats
     slots.value[idx].fullName = data.player?.fullName || slots.value[idx].fullName
   } catch (err) {
     slots.value[idx].error = err.message || 'Could not load this player.'
@@ -74,6 +75,7 @@ function addPlayer(person) {
     player: null,
     hittingSeasonStats: null,
     pitchingSeasonStats: null,
+    fieldingSeasonStats: null,
     loading: true,
     error: '',
   })
@@ -104,7 +106,9 @@ function syncUrl() {
 }
 
 function statsFor(slot) {
-  return group.value === 'pitching' ? slot.pitchingSeasonStats : slot.hittingSeasonStats
+  if (group.value === 'pitching') return slot.pitchingSeasonStats
+  if (group.value === 'fielding') return slot.fieldingSeasonStats
+  return slot.hittingSeasonStats
 }
 
 // For each stat row, figures out which slot(s) currently hold the best value, so the
@@ -129,6 +133,7 @@ if (route.query.ids) {
       player: null,
       hittingSeasonStats: null,
       pitchingSeasonStats: null,
+      fieldingSeasonStats: null,
       loading: true,
       error: '',
     })
@@ -139,7 +144,7 @@ if (route.query.ids) {
 
 <template>
   <h1>Compare Players</h1>
-  <p class="subtitle">Put up to {{ MAX_PLAYERS }} players side by side, hitting or pitching, season or career.</p>
+  <p class="subtitle">Put up to {{ MAX_PLAYERS }} players side by side, hitting, pitching, or fielding, season or career.</p>
 
   <form class="plain-form" @submit.prevent>
     <fieldset>
@@ -151,6 +156,10 @@ if (route.query.ids) {
       <label class="checkbox-row">
         <input type="radio" value="pitching" v-model="group" @change="syncUrl" />
         Pitching
+      </label>
+      <label class="checkbox-row">
+        <input type="radio" value="fielding" v-model="group" @change="syncUrl" />
+        Fielding
       </label>
     </fieldset>
 

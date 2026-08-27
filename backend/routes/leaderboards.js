@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
-import { deriveSingles, deriveSplat, deriveRangeFactor, attachWar } from '../derivedStats.js'
+import { deriveSingles, deriveSplat, deriveRangeFactor, attachWar, sumFieldingStats } from '../derivedStats.js'
 
 const router = Router()
 
@@ -46,7 +46,17 @@ router.get('/', async (req, res) => {
 
     const splits = data.stats?.[0]?.splits || []
 
-    let rows = splits.map((split) => ({
+    // Fielding leaderboard splits have the same multi-position-per-player issue as a
+    // single player's own season stats (see the big comment on sumFieldingStats in
+    // derivedStats.js) — a player who played more than one position that season can
+    // appear as MULTIPLE separate rows here, each with only that position's partial
+    // stats, instead of one row with their real combined season. Grouped and summed by
+    // player before building display rows, so a multi-position player shows up once,
+    // correctly, on a fielding leaderboard instead of fragmented (or effectively
+    // under-ranked, since each partial row individually looks worse than their real total).
+    const groupedSplits = group === 'fielding' ? groupFieldingSplitsByPlayer(splits) : splits
+
+    let rows = groupedSplits.map((split) => ({
       playerId: split.player?.id,
       playerName: split.player?.fullName,
       teamId: split.team?.id,
@@ -94,6 +104,29 @@ router.get('/', async (req, res) => {
     res.status(502).json({ error: 'Could not reach the MLB Stats API.' })
   }
 })
+
+// Groups fielding leaderboard splits by player, summing across positions (see
+// sumFieldingStats in derivedStats.js) so a player who played multiple positions in the
+// season shows up as ONE row with their real combined totals — not fragmented into
+// several partial-stat rows. A leaderboard is inherently a whole-season view, so a
+// player's team here is whichever team their most recent/largest split belongs to (good
+// enough for display purposes on a leaderboard row; the precise multi-team breakdown
+// still shows correctly on that player's own year-by-year page).
+function groupFieldingSplitsByPlayer(splits) {
+  const groups = new Map()
+  for (const split of splits) {
+    const playerId = split.player?.id
+    if (!groups.has(playerId)) {
+      groups.set(playerId, { player: split.player, team: split.team, stats: [] })
+    }
+    groups.get(playerId).stats.push(split.stat)
+  }
+  return [...groups.values()].map((g) => ({
+    player: g.player,
+    team: g.team,
+    stat: g.stats.length === 1 ? g.stats[0] : sumFieldingStats(g.stats),
+  }))
+}
 
 function withDerivedStats(stat = {}, group) {
   const merged = { ...stat }

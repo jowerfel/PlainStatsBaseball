@@ -2,19 +2,20 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getLeaderboard } from '@/services/mlbApi.js'
-import { getStatsByGroup } from '@/data/statDictionary.js'
+import { getStatsByGroup, statDictionary } from '@/data/statDictionary.js'
 import { isCustomStatKey, computeCustomStat, getCustomStat } from '@/data/customStats.js'
 import StatTable from '@/components/StatTable.vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const group = ref(route.query.group === 'pitching' ? 'pitching' : 'hitting')
+const group = ref(['pitching', 'fielding'].includes(route.query.group) ? route.query.group : 'hitting')
 const selectedStats = ref(
   route.query.stats ? String(route.query.stats).split(',') : ['avg', 'ops'],
 )
 const minPA = ref(route.query.minPA || '')
 const minIP = ref(route.query.minIP || '')
+const minInnings = ref(route.query.minInnings || '')
 const seasonType = ref(route.query.season === 'career' ? 'career' : 'season')
 const season = ref(
   route.query.season && String(route.query.season) !== 'career'
@@ -102,8 +103,13 @@ function onSortRequested(col) {
     activeSortDir.value = activeSortDir.value === 'desc' ? 'asc' : 'desc'
   } else {
     activeSortStat.value = col.key
-    const customDef = isCustomStatKey(col.key) ? getCustomStat(col.key) : null
-    activeSortDir.value = customDef ? (customDef.goodDirection === 'low' ? 'asc' : 'desc') : 'desc'
+    // Default sort direction follows the stat's own goodDirection (e.g. Errors defaults
+    // to ascending — fewest first — instead of every stat defaulting to descending
+    // regardless of what "better" means for it). Works for both real stats (looked up in
+    // statDictionary, which now includes fielding entries) and custom ones (looked up via
+    // getCustomStat, since those aren't in statDictionary).
+    const def = isCustomStatKey(col.key) ? getCustomStat(col.key) : statDictionary[col.key]
+    activeSortDir.value = def?.goodDirection === 'low' ? 'asc' : 'desc'
   }
   if (isCustomStatKey(col.key)) return // displayRows handles it reactively, no refetch needed
   runSearch()
@@ -129,6 +135,7 @@ async function runSearch() {
       sortStat: activeSortStat.value || undefined,
       minPA: minPA.value || undefined,
       minIP: minIP.value || undefined,
+      minInnings: minInnings.value || undefined,
       season: seasonValue,
     },
   })
@@ -148,6 +155,7 @@ async function runSearch() {
       season: seasonValue,
       minPA: group.value === 'hitting' ? minPA.value || undefined : undefined,
       minIP: group.value === 'pitching' ? minIP.value || undefined : undefined,
+      minInnings: group.value === 'fielding' ? minInnings.value || undefined : undefined,
       limit: 100,
     })
     rows.value = data.rows || []
@@ -189,6 +197,10 @@ if (route.query.stats) {
         <input type="radio" value="pitching" v-model="group" @change="selectedStats = ['era', 'whip']" />
         Pitching
       </label>
+      <label class="checkbox-row">
+        <input type="radio" value="fielding" v-model="group" @change="selectedStats = ['fielding', 'rangeFactor']" />
+        Fielding
+      </label>
     </fieldset>
 
     <fieldset>
@@ -225,9 +237,13 @@ if (route.query.stats) {
         <label for="minpa-input">Minimum plate appearances</label>
         <input id="minpa-input" v-model="minPA" type="number" min="0" placeholder="e.g. 200" />
       </template>
-      <template v-else>
+      <template v-else-if="group === 'pitching'">
         <label for="minip-input">Minimum innings pitched</label>
         <input id="minip-input" v-model="minIP" type="number" min="0" placeholder="e.g. 50" />
+      </template>
+      <template v-else>
+        <label for="mininnings-input">Minimum innings played</label>
+        <input id="mininnings-input" v-model="minInnings" type="number" min="0" placeholder="e.g. 200" />
       </template>
     </fieldset>
 

@@ -1,7 +1,14 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
-import { deriveSingles, deriveSplat, deriveRangeFactor, attachWar } from '../derivedStats.js'
+import {
+  deriveSingles,
+  deriveSplat,
+  deriveRangeFactor,
+  attachWar,
+  extractFieldingSeasonTotal,
+  sumFieldingStats,
+} from '../derivedStats.js'
 
 const router = Router()
 
@@ -121,7 +128,7 @@ router.get('/:id', async (req, res) => {
       season,
     )
     const fieldingStats = mergeDerivedStats(
-      extractSeasonSplit(fieldingSeason),
+      extractFieldingSeasonTotal(fieldingSeason),
       'fielding',
       personId,
       season,
@@ -151,7 +158,7 @@ router.get('/:id/year-by-year', async (req, res) => {
       () => mlb.getPersonYearByYearStats(personId, group),
     )
     const splits = data.stats?.[0]?.splits || []
-    const seasons = splits
+    const seasons = (group === 'fielding' ? groupFieldingSplitsBySeasonAndTeam(splits) : splits)
       .map((split) => ({
         season: split.season,
         team: split.team?.name || null,
@@ -227,6 +234,28 @@ function mergeDerivedStats(stats, group, personId, season) {
   }
 
   return merged
+}
+
+// Groups year-by-year fielding splits by season+team, summing across positions within
+// each group (see extractFieldingSeasonTotal for the full reasoning) — WITHOUT collapsing
+// genuinely different team stints in the same year (a real mid-season trade correctly
+// stays as separate rows, same as hitting/pitching already do; only same-team,
+// same-season, different-POSITION splits get combined).
+function groupFieldingSplitsBySeasonAndTeam(splits) {
+  const groups = new Map()
+  for (const split of splits) {
+    const key = `${split.season}:${split.team?.id ?? 'none'}`
+    if (!groups.has(key)) {
+      groups.set(key, { season: split.season, team: split.team, sport: split.sport, stats: [] })
+    }
+    groups.get(key).stats.push(split.stat)
+  }
+  return [...groups.values()].map((g) => ({
+    season: g.season,
+    team: g.team,
+    sport: g.sport,
+    stat: g.stats.length === 1 ? g.stats[0] : sumFieldingStats(g.stats),
+  }))
 }
 
 export default router
