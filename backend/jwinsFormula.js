@@ -17,7 +17,7 @@ export const JWINS_WEIGHTS = {
     doubles: 0.74,
     triples: 1.04,
     homeRuns: 1.4,
-    strikeOuts: -0.3,
+    strikeOuts: -0,
     walks: 0.29,
     stolenBases: 0.2,
     hitByPitch: 0.31,
@@ -44,11 +44,11 @@ export const JWINS_WEIGHTS = {
   // be looked up directly with no translation step.
   fielding: {
     countingStats: 0.2,
-    divisor: 10,
+    divisor: 75,
     positionalRunValue: {
       C: 9,
       SS: 7,
-      '2B': 3,
+      '2B': 30,
       CF: 2.5,
       '3B': 2,
       RF: -7,
