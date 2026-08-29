@@ -1,7 +1,14 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
-import { deriveSingles, deriveSplat, deriveRangeFactor, attachWar, sumFieldingStats } from '../derivedStats.js'
+import {
+  deriveSingles,
+  deriveSplat,
+  deriveRangeFactor,
+  attachWar,
+  sumFieldingStats,
+  computeJWinsFieldingForSeason,
+} from '../derivedStats.js'
 
 const router = Router()
 
@@ -61,7 +68,7 @@ router.get('/', async (req, res) => {
       playerName: split.player?.fullName,
       teamId: split.team?.id,
       teamName: split.team?.name,
-      stat: withDerivedStats(split.stat, group),
+      stat: withDerivedStats(split.stat, group, split.positionSplits),
     }))
 
     if (minPA !== null) {
@@ -117,18 +124,22 @@ function groupFieldingSplitsByPlayer(splits) {
   for (const split of splits) {
     const playerId = split.player?.id
     if (!groups.has(playerId)) {
-      groups.set(playerId, { player: split.player, team: split.team, stats: [] })
+      groups.set(playerId, { player: split.player, team: split.team, entries: [] })
     }
-    groups.get(playerId).stats.push(split.stat)
+    groups.get(playerId).entries.push({
+      stat: split.stat,
+      position: split.position?.abbreviation || split.stat?.position?.abbreviation || null,
+    })
   }
   return [...groups.values()].map((g) => ({
     player: g.player,
     team: g.team,
-    stat: g.stats.length === 1 ? g.stats[0] : sumFieldingStats(g.stats),
+    stat: g.entries.length === 1 ? g.entries[0].stat : sumFieldingStats(g.entries.map((e) => e.stat)),
+    positionSplits: g.entries,
   }))
 }
 
-function withDerivedStats(stat = {}, group) {
+function withDerivedStats(stat = {}, group, positionSplits) {
   const merged = { ...stat }
 
   if (group === 'fielding') {
@@ -139,6 +150,17 @@ function withDerivedStats(stat = {}, group) {
     if (merged.caughtStealing !== undefined) merged.fieldingCaughtStealing = merged.caughtStealing
     if (merged.stolenBases !== undefined) merged.fieldingStolenBases = merged.stolenBases
     merged.rangeFactor = deriveRangeFactor(merged)
+
+    // Same reasoning as routes/players.js's mergeDerivedStats: JWinsF's positional run
+    // value has to apply per position for a multi-position season, not against one
+    // combined counting-stat total, so a multi-position leaderboard row computes it from
+    // the raw per-position pieces instead of the generic single-position attachWar path.
+    if (positionSplits && positionSplits.length > 1) {
+      merged.war_fielding = computeJWinsFieldingForSeason(positionSplits)
+    } else {
+      const singlePosition = positionSplits?.[0]?.position || null
+      attachWar(merged, 'fielding', singlePosition)
+    }
     return merged
   }
 

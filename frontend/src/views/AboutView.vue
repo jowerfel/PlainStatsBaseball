@@ -5,8 +5,9 @@ import { statDictionary } from '@/data/statDictionary.js'
 // Pulled live from the same data files the rest of the site reads from, rather than
 // hand-copied text, so this list can't drift out of sync when a stat's formula changes or
 // a new custom stat gets added to customStats.js.
-const jwarHitting = statDictionary.war
-const jwarPitching = statDictionary.war_pitching
+const jwinsBatting = statDictionary.war
+const jwinsPitching = statDictionary.war_pitching
+const jwinsFielding = statDictionary.war_fielding
 </script>
 
 <template>
@@ -28,24 +29,42 @@ const jwarPitching = statDictionary.war_pitching
   <div class="section">
     <h2>Custom stats</h2>
     <p class="muted">
-      These aren't official MLB stats — they're formulas built specifically for this site.
+      These aren't official MLB stats — they're formulas built specifically for this
+      site. See the dedicated <RouterLink to="/jwins">JWins page</RouterLink> for career,
+      single-season, and combined leaderboards.
     </p>
 
-    <h3>{{ jwarHitting.simpleName }} (hitters)</h3>
-    <p>{{ jwarHitting.shortExplain }}</p>
-    <p class="muted">{{ jwarHitting.extraExplain }}</p>
+    <h3>{{ jwinsBatting.simpleName }} (batting)</h3>
+    <p>{{ jwinsBatting.shortExplain }}</p>
+    <p class="muted">{{ jwinsBatting.extraExplain }}</p>
 
-    <h3>{{ jwarPitching.simpleName }} (pitchers)</h3>
-    <p>{{ jwarPitching.shortExplain }}</p>
-    <p class="muted">{{ jwarPitching.extraExplain }}</p>
+    <h3>{{ jwinsPitching.simpleName }} (pitching)</h3>
+    <p>{{ jwinsPitching.shortExplain }}</p>
+    <p class="muted">{{ jwinsPitching.extraExplain }}</p>
+
+    <h3>{{ jwinsFielding.simpleName }} (fielding)</h3>
+    <p>{{ jwinsFielding.shortExplain }}</p>
+    <p class="muted">{{ jwinsFielding.extraExplain }}</p>
+
+    <h3>JWins Complete</h3>
+    <p>
+      One number combining a player's batting, pitching, and fielding JWins for a season —
+      whichever of those three they actually have data for. A batting-only player's
+      Complete is just their JWinsB; a two-way player's is JWinsB + JWinsP (+ JWinsF, if
+      they have fielding innings too).
+    </p>
+    <p class="muted">
+      Every weight behind all four of these lives in one place —
+      <code>backend/jwinsFormula.js</code> — so trying a different value is a one-line
+      edit there, not a hunt through the codebase.
+    </p>
 
     <template v-for="stat in CUSTOM_STATS" :key="stat.key">
       <h3>{{ stat.name }}</h3>
       <p>{{ stat.shortExplain }}</p>
       <p class="muted">Formula: <code>{{ stat.formula }}</code></p>
       <p class="muted">
-        Shows up in the <RouterLink to="/leaderboards/custom">Custom Leaderboard Builder</RouterLink>,
-        not on individual player pages.
+        Shows up in the leaderboard pages, not on individual player pages.
       </p>
     </template>
   </div>

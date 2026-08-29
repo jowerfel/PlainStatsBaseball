@@ -8,6 +8,8 @@ import {
   attachWar,
   extractFieldingSeasonTotal,
   sumFieldingStats,
+  computeJWinsFieldingForSeason,
+  computeJWinsComplete,
 } from '../derivedStats.js'
 
 const router = Router()
@@ -127,18 +129,31 @@ router.get('/:id', async (req, res) => {
       personId,
       season,
     )
+    const fieldingExtracted = extractFieldingSeasonTotal(fieldingSeason)
     const fieldingStats = mergeDerivedStats(
-      extractFieldingSeasonTotal(fieldingSeason),
+      fieldingExtracted?.stat || null,
       'fielding',
       personId,
       season,
+      fieldingExtracted?.positionSplits,
     )
+
+    // JWins Complete: one number combining every facet of this player's game this season
+    // — see computeJWinsComplete in jwinsFormula.js for exactly how missing components
+    // are handled (a pure hitter's Complete is just their JWinsB, not JWinsB + a phantom
+    // 0 for fielding/pitching they were never evaluated on).
+    const jwinsComplete = computeJWinsComplete({
+      batting: hittingStats?.war ?? null,
+      pitching: pitchingStats?.war_pitching ?? null,
+      fielding: fieldingStats?.war_fielding ?? null,
+    })
 
     res.json({
       player,
       hittingSeasonStats: hittingStats,
       pitchingSeasonStats: pitchingStats,
       fieldingSeasonStats: fieldingStats,
+      jwinsComplete,
     })
   } catch (err) {
     console.error('players/:id failed:', err.message)
@@ -163,7 +178,7 @@ router.get('/:id/year-by-year', async (req, res) => {
         season: split.season,
         team: split.team?.name || null,
         sport: split.sport?.abbreviation || null,
-        ...mergeDerivedStats(split.stat, group, personId, split.season),
+        ...mergeDerivedStats(split.stat, group, personId, split.season, split.positionSplits),
       }))
       .sort((a, b) => Number(a.season) - Number(b.season))
     res.json({ seasons })
@@ -199,7 +214,7 @@ function extractSeasonSplit(seasonResponse) {
   return split ? split.stat : null
 }
 
-function mergeDerivedStats(stats, group, personId, season) {
+function mergeDerivedStats(stats, group, personId, season, positionSplits) {
   if (!stats) return null
   const merged = { ...stats }
 
@@ -231,6 +246,19 @@ function mergeDerivedStats(stats, group, personId, season) {
     if (merged.caughtStealing !== undefined) merged.fieldingCaughtStealing = merged.caughtStealing
     if (merged.stolenBases !== undefined) merged.fieldingStolenBases = merged.stolenBases
     merged.rangeFactor = deriveRangeFactor(merged)
+
+    // JWinsF needs the positional run value applied PER POSITION for a multi-position
+    // season (see computeJWinsFieldingForSeason in jwinsFormula.js) — a single combined
+    // putOuts+assists+errors total loses which position each stat came from, so this
+    // can't reuse the generic attachWar(merged, 'fielding') path when there's more than
+    // one position split. Falls back to that simpler single-position path (or a bare
+    // "no position known" case) when there's nothing more specific to work with.
+    if (positionSplits && positionSplits.length > 1) {
+      merged.war_fielding = computeJWinsFieldingForSeason(positionSplits)
+    } else {
+      const singlePosition = positionSplits?.[0]?.position || null
+      attachWar(merged, 'fielding', singlePosition)
+    }
   }
 
   return merged
@@ -240,21 +268,28 @@ function mergeDerivedStats(stats, group, personId, season) {
 // each group (see extractFieldingSeasonTotal for the full reasoning) — WITHOUT collapsing
 // genuinely different team stints in the same year (a real mid-season trade correctly
 // stays as separate rows, same as hitting/pitching already do; only same-team,
-// same-season, different-POSITION splits get combined).
+// same-season, different-POSITION splits get combined). Also carries each group's raw
+// positionSplits through (not just the combined display stat), since JWinsF needs the
+// per-position pieces to apply each position's own run value correctly — see
+// computeJWinsFieldingForSeason in jwinsFormula.js.
 function groupFieldingSplitsBySeasonAndTeam(splits) {
   const groups = new Map()
   for (const split of splits) {
     const key = `${split.season}:${split.team?.id ?? 'none'}`
     if (!groups.has(key)) {
-      groups.set(key, { season: split.season, team: split.team, sport: split.sport, stats: [] })
+      groups.set(key, { season: split.season, team: split.team, sport: split.sport, entries: [] })
     }
-    groups.get(key).stats.push(split.stat)
+    groups.get(key).entries.push({
+      stat: split.stat,
+      position: split.position?.abbreviation || split.stat?.position?.abbreviation || null,
+    })
   }
   return [...groups.values()].map((g) => ({
     season: g.season,
     team: g.team,
     sport: g.sport,
-    stat: g.stats.length === 1 ? g.stats[0] : sumFieldingStats(g.stats),
+    stat: g.entries.length === 1 ? g.entries[0].stat : sumFieldingStats(g.entries.map((e) => e.stat)),
+    positionSplits: g.entries,
   }))
 }
 

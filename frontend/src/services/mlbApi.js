@@ -98,6 +98,16 @@ export function getLeaderboard({ group = 'hitting', season, stats = [], sortStat
   return apiGet(`/leaderboard?${params.toString()}`)
 }
 
+// JWins Complete combines a player's batting, pitching, AND fielding JWins into one
+// number — no single MLB API endpoint has all three at once, so this hits a dedicated
+// backend route that merges them (see backend/routes/jwins.js).
+export function getJWinsComplete({ season, limit = 50 } = {}) {
+  const params = new URLSearchParams()
+  if (season) params.set('season', season)
+  params.set('limit', limit)
+  return apiGet(`/jwins/complete?${params.toString()}`)
+}
+
 export function getPitcherNextStart(playerId, teamId) {
   return apiGet(`/pitchers/${playerId}/next-start?teamId=${teamId}`)
 }

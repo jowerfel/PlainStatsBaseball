@@ -10,6 +10,7 @@ import pitchersRouter from './routes/pitchers.js'
 import liveRouter from './routes/live.js'
 import standingsRouter from './routes/standings.js'
 import articlesRouter from './routes/articles.js'
+import jwinsRouter from './routes/jwins.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -48,8 +49,9 @@ app.use('/api/pitchers', pitchersRouter)
 app.use('/api/live', liveRouter)
 app.use('/api/standings', standingsRouter)
 app.use('/api/articles', articlesRouter)
+app.use('/api/jwins', jwinsRouter)
 
-console.log('Mounted API routes: /api/players, /api/leaderboard, /api/pitchers, /api/live, /api/standings, /api/articles')
+console.log('Mounted API routes: /api/players, /api/leaderboard, /api/pitchers, /api/live, /api/standings, /api/articles, /api/jwins')
 
 // An unmatched /api/* request is a real 404 — no such endpoint exists, so say so plainly.
 app.use('/api', (req, res) => {
