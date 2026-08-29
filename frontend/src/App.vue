@@ -37,6 +37,8 @@ function dismissNotice() {
         <span class="nav-sep">|</span>
         <RouterLink to="/leaderboards/custom" data-umami-event="Leaderboards">Leaderboards</RouterLink>
         <span class="nav-sep">|</span>
+        <RouterLink to="/jwins" data-umami-event="JWins">JWins</RouterLink>
+        <span class="nav-sep">|</span>
         <RouterLink to="/pitchers" data-umami-event="Following">Following</RouterLink>
         <span class="nav-sep">|</span>
         <RouterLink to="/players/search" data-umami-event="Search" >Players</RouterLink>

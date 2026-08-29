@@ -108,6 +108,16 @@ export function getJWinsComplete({ season, limit = 50 } = {}) {
   return apiGet(`/jwins/complete?${params.toString()}`)
 }
 
+// The best individual player-SEASON performances for one JWins facet across many years
+// (not "who's good this year" — "what's the single greatest season anyone's had").
+export function getJWinsBestSingleSeason({ facet = 'batting', years, limit = 50 } = {}) {
+  const params = new URLSearchParams()
+  params.set('facet', facet)
+  if (years) params.set('years', years)
+  params.set('limit', limit)
+  return apiGet(`/jwins/best-single-season?${params.toString()}`)
+}
+
 export function getPitcherNextStart(playerId, teamId) {
   return apiGet(`/pitchers/${playerId}/next-start?teamId=${teamId}`)
 }
