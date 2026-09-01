@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getLeaderboard, getJWinsComplete, getJWinsBestSingleSeason } from '@/services/mlbApi.js'
 import { formatStatValue } from '@/data/statDictionary.js'
 import StatTable from '@/components/StatTable.vue'
+import JWinsBattingPitchingChart from '@/components/JWinsBattingPitchingChart.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,13 +27,6 @@ const facetToGroupAndStat = {
   pitching: { group: 'pitching', stat: 'war_pitching' },
   fielding: { group: 'fielding', stat: 'war_fielding' },
 }
-
-// Complete isn't available on the Best Single Season tab — finding the single best season
-// combining batting+pitching+fielding across many years would mean merging three separate
-// pools for EVERY year scanned (dozens of upstream calls per request) for a number that,
-// realistically, almost nobody will have all three components for in the same year at a
-// meaningful level. Simpler and honest to just not offer that combination.
-const completeDisabledOnBestSeason = computed(() => activeTab.value === 'bestSeason')
 
 const season = ref(route.query.season || String(new Date().getFullYear()))
 const yearsBack = ref(route.query.years || '30')
@@ -122,6 +116,12 @@ async function loadBestSeason() {
       teamName: r.teamName,
       season: r.season,
       jwins: r.jwins,
+      // Only present when facet === 'complete' (see fetchCompleteSeasonRows on the
+      // backend) — undefined otherwise, which the columns/table just won't render.
+      batting: r.batting,
+      pitching: r.pitching,
+      fielding: r.fielding,
+      jwinsComplete: r.jwins,
     }))
   } catch (err) {
     errorMsg.value = err.message || 'Could not load the best-season leaderboard.'
@@ -132,11 +132,6 @@ async function loadBestSeason() {
 }
 
 function load() {
-  // Complete isn't offered on Best Single Season — fall back to Batting rather than
-  // silently trying to load something that isn't there.
-  if (activeTab.value === 'bestSeason' && facet.value === 'complete') {
-    facet.value = 'batting'
-  }
   syncUrl()
   if (activeTab.value === 'career') {
     facet.value === 'complete' ? loadComplete('career') : loadFacetLeaderboard('career')
@@ -166,15 +161,19 @@ const facetLabel = computed(() => {
 
 const columns = computed(() => {
   if (facet.value === 'complete') {
-    return [
+    const cols = [
       { key: 'rank', label: '#', isStat: false },
       { key: 'playerName', label: 'Player', isStat: false, link: (row) => `/players/${row.id}` },
       { key: 'teamName', label: 'Team', isStat: false },
+    ]
+    if (activeTab.value === 'bestSeason') cols.push({ key: 'season', label: 'Season', isStat: false })
+    cols.push(
       { key: 'battingDisplay', label: 'JWinsB', isStat: false },
       { key: 'pitchingDisplay', label: 'JWinsP', isStat: false },
       { key: 'fieldingDisplay', label: 'JWinsF', isStat: false },
       { key: 'completeDisplay', label: 'JWins Complete', isStat: false },
-    ]
+    )
+    return cols
   }
   const cols = [
     { key: 'rank', label: '#', isStat: false },
@@ -249,21 +248,10 @@ onMounted(load)
         <input type="radio" value="fielding" :checked="facet === 'fielding'" @change="setFacet('fielding')" />
         Fielding
       </label>
-      <label class="checkbox-row" style="display: inline;" :style="completeDisabledOnBestSeason ? 'opacity: 0.5;' : ''">
-        <input
-          type="radio"
-          value="complete"
-          :checked="facet === 'complete'"
-          :disabled="completeDisabledOnBestSeason"
-          @change="setFacet('complete')"
-        />
+      <label class="checkbox-row" style="display: inline;">
+        <input type="radio" value="complete" :checked="facet === 'complete'" @change="setFacet('complete')" />
         Complete
       </label>
-      <p v-if="completeDisabledOnBestSeason" class="muted" style="margin: 4px 0 0 0;">
-        Complete isn't available for Best Single Season Ever — finding one year with
-        great batting, pitching, AND fielding all at once, across many years, is a much
-        bigger search than this page does for the other two tabs.
-      </p>
     </div>
   </div>
 
@@ -294,6 +282,7 @@ onMounted(load)
         <template v-if="facet === 'complete'">{{ formatStatValue('war', leader.jwinsComplete) }} JWins Complete</template>
         <template v-else>{{ formatStatValue(facet === 'pitching' ? 'war_pitching' : facet === 'fielding' ? 'war_fielding' : 'war', leader.jwins) }} {{ facetLabel }}</template>
       </p>
+      <!--<JWinsBattingPitchingChart v-if="facet === 'complete'" :rows="rows" />-->
       <StatTable :columns="columns" :rows="displayRows" />
     </template>
   </div>

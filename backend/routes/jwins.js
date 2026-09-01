@@ -85,6 +85,109 @@ async function fetchFacetSeasonRows(facet, season) {
     .sort((a, b) => b.jwins - a.jwins)
 }
 
+// Fetches one season's JWins Complete leaderboard — batting + pitching + fielding merged
+// by player, same logic as the /complete route below, factored out so
+// /best-single-season can call it per-year too (see fetchFacetSeasonRows for the same
+// pattern applied to a single facet).
+async function fetchCompleteSeasonRows(season) {
+  const isCurrentSeason = Number(season) === new Date().getFullYear() || season === 'career'
+  const ttl = isCurrentSeason ? 5 * 60 * 1000 : 24 * 60 * 60 * 1000
+
+  const [hittingData, pitchingData, fieldingData] = await Promise.all([
+    cached(`jwins-pool:hitting:${season}`, ttl, () =>
+      mlb.getSeasonLeaderboard({ season, group: 'hitting', limit: POOL_SIZE }),
+    ),
+    cached(`jwins-pool:pitching:${season}`, ttl, () =>
+      mlb.getSeasonLeaderboard({ season, group: 'pitching', limit: POOL_SIZE }),
+    ),
+    cached(`jwins-pool:fielding:${season}`, ttl, () =>
+      mlb.getSeasonLeaderboard({ season, group: 'fielding', limit: POOL_SIZE }),
+    ),
+  ])
+
+  // playerId -> { playerId, playerName, teamName, batting, pitching, fielding }
+  const merged = new Map()
+
+  function upsert(playerId, playerName, teamName) {
+    if (!merged.has(playerId)) {
+      merged.set(playerId, { playerId, playerName, teamName, batting: null, pitching: null, fielding: null })
+    }
+    const entry = merged.get(playerId)
+    // Keep whichever team name we saw most recently across the three pools — good
+    // enough for display; a player's precise multi-team season still shows correctly
+    // on their own year-by-year page.
+    if (teamName) entry.teamName = teamName
+    return entry
+  }
+
+  for (const split of hittingData.stats?.[0]?.splits || []) {
+    const playerId = split.player?.id
+    if (!playerId) continue
+    const mergedStat = { ...split.stat }
+    mergedStat.singles = deriveSingles(mergedStat)
+    attachWar(mergedStat, 'hitting')
+    upsert(playerId, split.player?.fullName, split.team?.name).batting = mergedStat.war
+  }
+
+  for (const split of pitchingData.stats?.[0]?.splits || []) {
+    const playerId = split.player?.id
+    if (!playerId) continue
+    const mergedStat = { ...split.stat }
+    attachWar(mergedStat, 'pitching')
+    upsert(playerId, split.player?.fullName, split.team?.name).pitching = mergedStat.war_pitching
+  }
+
+  // Fielding pool needs the same multi-position-per-player grouping as the regular
+  // leaderboard route (see routes/leaderboards.js's groupFieldingSplitsByPlayer for the
+  // full reasoning) before JWinsF can be computed correctly per player.
+  const fieldingSplits = fieldingData.stats?.[0]?.splits || []
+  const fieldingGroups = new Map()
+  for (const split of fieldingSplits) {
+    const playerId = split.player?.id
+    if (!playerId) continue
+    if (!fieldingGroups.has(playerId)) {
+      fieldingGroups.set(playerId, { player: split.player, team: split.team, entries: [] })
+    }
+    fieldingGroups.get(playerId).entries.push({
+      stat: split.stat,
+      position: split.position?.abbreviation || split.stat?.position?.abbreviation || null,
+    })
+  }
+  for (const g of fieldingGroups.values()) {
+    const jwinsF =
+      g.entries.length > 1
+        ? computeJWinsFieldingForSeason(g.entries)
+        : (() => {
+            const stat = { ...g.entries[0].stat }
+            attachWar(stat, 'fielding', g.entries[0].position)
+            return stat.war_fielding
+          })()
+    upsert(g.player.id, g.player.fullName, g.team?.name).fielding = jwinsF
+  }
+
+  return [...merged.values()]
+    .map((entry) => ({
+      ...entry,
+      // "jwins" (not jwinsComplete) so this return shape matches fetchFacetSeasonRows's
+      // { playerId, playerName, teamName, jwins } exactly — /best-single-season treats
+      // every facet, including complete, identically once it has that common shape.
+      jwins: computeJWinsComplete({
+        batting: entry.batting,
+        pitching: entry.pitching,
+        fielding: entry.fielding,
+      }),
+      // Kept alongside jwins so a Complete leaderboard/chart can still show the batting/
+      // pitching/fielding breakdown per player, not just the combined total.
+      batting: entry.batting,
+      pitching: entry.pitching,
+      fielding: entry.fielding,
+    }))
+    // A player with no computable component at all (jwins === null) can't be ranked —
+    // excluded rather than sorted arbitrarily to the top or bottom.
+    .filter((r) => r.jwins !== null)
+    .sort((a, b) => b.jwins - a.jwins)
+}
+
 // GET /api/jwins/complete?season=2026&limit=50
 // GET /api/jwins/complete?season=career&limit=50
 //
@@ -102,96 +205,20 @@ router.get('/complete', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, POOL_SIZE)
 
   try {
-    const [hittingData, pitchingData, fieldingData] = await Promise.all([
-      cached(`jwins-pool:hitting:${season}`, 5 * 60 * 1000, () =>
-        mlb.getSeasonLeaderboard({ season, group: 'hitting', limit: POOL_SIZE }),
-      ),
-      cached(`jwins-pool:pitching:${season}`, 5 * 60 * 1000, () =>
-        mlb.getSeasonLeaderboard({ season, group: 'pitching', limit: POOL_SIZE }),
-      ),
-      cached(`jwins-pool:fielding:${season}`, 5 * 60 * 1000, () =>
-        mlb.getSeasonLeaderboard({ season, group: 'fielding', limit: POOL_SIZE }),
-      ),
-    ])
-
-    // playerId -> { playerId, playerName, teamName, batting, pitching, fielding }
-    const merged = new Map()
-
-    function upsert(playerId, playerName, teamName) {
-      if (!merged.has(playerId)) {
-        merged.set(playerId, { playerId, playerName, teamName, batting: null, pitching: null, fielding: null })
-      }
-      const entry = merged.get(playerId)
-      // Keep whichever team name we saw most recently across the three pools — good
-      // enough for display; a player's precise multi-team season still shows correctly
-      // on their own year-by-year page.
-      if (teamName) entry.teamName = teamName
-      return entry
-    }
-
-    for (const split of hittingData.stats?.[0]?.splits || []) {
-      const playerId = split.player?.id
-      if (!playerId) continue
-      const mergedStat = { ...split.stat }
-      mergedStat.singles = deriveSingles(mergedStat)
-      attachWar(mergedStat, 'hitting')
-      upsert(playerId, split.player?.fullName, split.team?.name).batting = mergedStat.war
-    }
-
-    for (const split of pitchingData.stats?.[0]?.splits || []) {
-      const playerId = split.player?.id
-      if (!playerId) continue
-      const mergedStat = { ...split.stat }
-      attachWar(mergedStat, 'pitching')
-      upsert(playerId, split.player?.fullName, split.team?.name).pitching = mergedStat.war_pitching
-    }
-
-    // Fielding pool needs the same multi-position-per-player grouping as the regular
-    // leaderboard route (see routes/leaderboards.js's groupFieldingSplitsByPlayer for the
-    // full reasoning) before JWinsF can be computed correctly per player.
-    const fieldingSplits = fieldingData.stats?.[0]?.splits || []
-    const fieldingGroups = new Map()
-    for (const split of fieldingSplits) {
-      const playerId = split.player?.id
-      if (!playerId) continue
-      if (!fieldingGroups.has(playerId)) {
-        fieldingGroups.set(playerId, { player: split.player, team: split.team, entries: [] })
-      }
-      fieldingGroups.get(playerId).entries.push({
-        stat: split.stat,
-        position: split.position?.abbreviation || split.stat?.position?.abbreviation || null,
-      })
-    }
-    for (const g of fieldingGroups.values()) {
-      const jwinsF =
-        g.entries.length > 1
-          ? computeJWinsFieldingForSeason(g.entries)
-          : (() => {
-              const stat = { ...g.entries[0].stat }
-              attachWar(stat, 'fielding', g.entries[0].position)
-              return stat.war_fielding
-            })()
-      upsert(g.player.id, g.player.fullName, g.team?.name).fielding = jwinsF
-    }
-
-    const rows = [...merged.values()]
-      .map((entry) => ({
-        ...entry,
-        jwinsComplete: computeJWinsComplete({
-          batting: entry.batting,
-          pitching: entry.pitching,
-          fielding: entry.fielding,
-        }),
-      }))
-      // A player with no computable component at all (jwinsComplete === null) can't be
-      // ranked — excluded rather than sorted arbitrarily to the top or bottom.
-      .filter((r) => r.jwinsComplete !== null)
-      .sort((a, b) => b.jwinsComplete - a.jwinsComplete)
+    const rows = await fetchCompleteSeasonRows(season)
 
     res.json({
       season,
       poolSize: rows.length,
-      rows: rows.slice(0, limit),
+      rows: rows.slice(0, limit).map((r) => ({
+        playerId: r.playerId,
+        playerName: r.playerName,
+        teamName: r.teamName,
+        batting: r.batting,
+        pitching: r.pitching,
+        fielding: r.fielding,
+        jwinsComplete: r.jwins,
+      })),
     })
   } catch (err) {
     console.error('jwins/complete failed:', err.message)
@@ -210,7 +237,7 @@ router.get('/complete', async (req, res) => {
 // season-row per player across that whole window (so one all-time great isn't just
 // filling the entire top 10 with 8 of their own seasons), then ranks by JWins.
 router.get('/best-single-season', async (req, res) => {
-  const facet = ['pitching', 'fielding'].includes(req.query.facet) ? req.query.facet : 'batting'
+  const facet = ['pitching', 'fielding', 'complete'].includes(req.query.facet) ? req.query.facet : 'batting'
   const yearsBack = Math.min(Number(req.query.years) || 30, 60)
   const limit = Math.min(Number(req.query.limit) || 50, 200)
   const currentYear = new Date().getFullYear()
@@ -224,7 +251,15 @@ router.get('/best-single-season', async (req, res) => {
         const seasonResults = await Promise.all(
           Array.from({ length: yearsBack }, (_, i) => startYear + i).map(async (year) => {
             try {
-              const rows = await fetchFacetSeasonRows(facet, year)
+              // Complete needs 3 upstream calls PER YEAR (hitting+pitching+fielding
+              // pools) instead of 1, same as a single /complete request — 30 years of
+              // that is 90 calls for one page load, which is genuinely heavy. It's
+              // allowed here because Joshua asked for it directly, but it's the reason
+              // this whole result is cached (see the 5min wrapper above) rather than
+              // re-run on every request, and why yearsBack is capped at 60 regardless of
+              // facet.
+              const rows =
+                facet === 'complete' ? await fetchCompleteSeasonRows(year) : await fetchFacetSeasonRows(facet, year)
               return rows.slice(0, 25).map((r) => ({ ...r, season: year })) // top 25/season is plenty to find the all-time best
             } catch (err) {
               // One bad season shouldn't sink the whole request — skip it and keep going.
