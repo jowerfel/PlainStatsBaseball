@@ -1,20 +1,4 @@
 #!/usr/bin/env node
-// Diagnostic for "a player with a real, high JWinsF is missing from the fielding
-// leaderboard." Run on your machine/server (this sandbox can't reach statsapi.mlb.com).
-//
-//   node scripts/diagnose-fielding-leaderboard.js               (defaults to Ozzie Smith, career)
-//   node scripts/diagnose-fielding-leaderboard.js <playerId> career
-//   node scripts/diagnose-fielding-leaderboard.js <playerId> 1985
-//
-// Get <playerId> from the URL of any player's own page on the site (/players/<id>).
-// Ozzie Smith's id (122439, from mlb.com/player/ozzie-smith-122439) is the default so
-// this is copy-paste-runnable with no lookup step.
-//
-// This calls the SAME two code paths the site itself uses — routes/players.js's
-// per-player fielding fetch (what a player's own page uses) and routes/leaderboards.js's
-// leaderboard pool fetch (what the JWins fielding leaderboard uses) — for the same
-// player and season, and prints both so we can see exactly where they diverge, instead
-// of guessing.
 
 import * as mlb from '../mlbClient.js'
 import { extractFieldingSeasonTotal } from '../derivedStats.js'

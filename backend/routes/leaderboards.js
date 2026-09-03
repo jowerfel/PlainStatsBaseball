@@ -12,34 +12,10 @@ import {
 
 const router = Router()
 
-// GET /api/leaderboard?group=hitting&season=2026&stats=avg,ops&sortStat=ops&minPA=200&limit=50
-//
-// MVP note: this reads directly from the MLB Stats API's live season leaderboard
-// (spec section 8 step 5/6) rather than any local leaderboard cache. For now it is a
-// thin, cached pass-through from the MLB API plus optional season_stats overrides.
-//
-// sortStat controls which of the requested stats the results are ranked by (defaults to the
-// first one in `stats`). This matters because the upstream `/stats` endpoint returns rows in
-// ITS OWN default order (some single "prominent" counting stat, not chosen by us) — so a pool
-// large enough to contain the true all-time leaders in ANY stat has to be fetched, then fully
-// sorted server-side by sortStat before slicing to `limit`.
-//
-// POOL_SIZE used to be 300, which is where the actual reported bug lived: Rickey Henderson
-// (the real career stolen-base leader, 1406 SB) never appeared on the stolen-base leaderboard
-// because he doesn't rank in the upstream API's own top-300-by-whatever-it-defaults-to, so he
-// was excluded before the sortStat re-sort ever got to see him — sorting a pool that already
-// excludes the true leader can't fix the result, no matter how correct the sort itself is.
-// 3000 comfortably covers every player who's ever accumulated enough career volume in any
-// single counting or rate stat to plausibly lead a category (MLB's entire all-time player
-// pool for significant-playing-time players is well under this), and this is a single request
-// cached for 5 minutes, not something repeated per leaderboard view.
+
 const POOL_SIZE = 3000
 
-// How many past seasons to scan when building a CAREER fielding leaderboard from
-// individual season leaderboards (see buildCareerFieldingSplits below) — capped for the
-// same reason POOL_SIZE is capped above: this is real work done per request (one upstream
-// call per year), not free, and 60 years covers effectively every fielder whose career
-// total would plausibly rank near the top.
+
 const CAREER_FIELDING_YEARS_BACK = 60
 
 router.get('/', async (req, res) => {
@@ -55,10 +31,7 @@ router.get('/', async (req, res) => {
   try {
     let groupedSplits
 
-    // FIELDING + CAREER is special-cased — see the big comment on
-    // buildCareerFieldingSplits below for why MLB's direct "stats=career&group=fielding"
-    // leaderboard query can't be used as-is (it excludes most players who didn't play
-    // recently, e.g. Ozzie Smith is simply absent from it).
+    
     if (group === 'fielding' && season === 'career') {
       groupedSplits = await cached(
         `career-fielding-splits:${CAREER_FIELDING_YEARS_BACK}`,
@@ -71,14 +44,7 @@ router.get('/', async (req, res) => {
         mlb.getSeasonLeaderboard({ season, group, limit: POOL_SIZE }),
       )
       const splits = data.stats?.[0]?.splits || []
-      // Fielding leaderboard splits have the same multi-position-per-player issue as a
-      // single player's own season stats (see the big comment on sumFieldingStats in
-      // derivedStats.js) — a player who played more than one position that season can
-      // appear as MULTIPLE separate rows here, each with only that position's partial
-      // stats, instead of one row with their real combined season. Grouped and summed by
-      // player before building display rows, so a multi-position player shows up once,
-      // correctly, on a fielding leaderboard instead of fragmented (or effectively
-      // under-ranked, since each partial row individually looks worse than their real total).
+      
       groupedSplits = group === 'fielding' ? groupFieldingSplitsByPlayer(splits) : splits
     }
 
@@ -97,10 +63,7 @@ router.get('/', async (req, res) => {
       rows = rows.filter((r) => Number(r.stat?.inningsPitched || 0) >= minIP)
     }
     if (minInnings !== null) {
-      // Fielding's own innings-played field, reported the same "whole.thirds" way as
-      // pitching IP (see inningsPitchedToDecimal in derivedStats.js) — compared as a
-      // plain string-prefix number here since a minimum-innings filter only needs to be
-      // roughly right, not innings-and-thirds precise.
+      
       rows = rows.filter((r) => Number(r.stat?.innings || 0) >= minInnings)
     }
 
@@ -131,31 +94,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// Builds a CAREER fielding leaderboard by summing each player's JWinsF across many
-// individual SEASON fielding leaderboards, instead of asking MLB's API for one aggregate
-// "stats=career&group=fielding" leaderboard directly.
-//
-// Two separate, real problems this works around:
-//   1. MLB's direct career+fielding leaderboard query excludes most players who didn't
-//      play recently (confirmed: Ozzie Smith, retired 1996, simply isn't in it, despite
-//      his own per-player career fielding stats being complete via a different endpoint).
-//   2. Even where career fielding data IS available, computing JWinsF directly against
-//      career-TOTALED counting stats and career-TOTALED innings is wrong on its own —
-//      the positional run value's innings-based proration (capped at one season's worth,
-//      1350 innings — see jwinsFormula.js) collapses an entire multi-decade career down
-//      to a single season's maximum bonus instead of correctly accumulating it once per
-//      season actually played. (This is the same bug just fixed in routes/players.js for
-//      a single player's own career page — see that file's comment for the full story.)
-//
-// So this fetches each season's fielding leaderboard (season mode is confirmed working
-// correctly), computes each player's OWN correctly-capped JWinsF for that one season, and
-// sums those already-correct per-season numbers into a career total — never re-deriving
-// JWinsF from summed raw stats. Returns the same shape groupFieldingSplitsByPlayer does
-// ({ player, team, stat, positionSplits }) so it plugs into the existing row-building
-// code unchanged; `stat` carries summed raw counting stats (for display columns like
-// career PO/A/E) with `war_fielding` OVERWRITTEN to the correctly-summed career JWinsF
-// afterward, since the raw-stat sum alone would (again) compute the wrong JWinsF if left
-// to withDerivedStats' normal single-season path.
+
 async function buildCareerFieldingSplits() {
   const currentYear = new Date().getFullYear()
   const startYear = currentYear - CAREER_FIELDING_YEARS_BACK + 1
@@ -219,13 +158,7 @@ async function buildCareerFieldingSplits() {
   })
 }
 
-// Groups fielding leaderboard splits by player, summing across positions (see
-// sumFieldingStats in derivedStats.js) so a player who played multiple positions in the
-// season shows up as ONE row with their real combined totals — not fragmented into
-// several partial-stat rows. A leaderboard is inherently a whole-season view, so a
-// player's team here is whichever team their most recent/largest split belongs to (good
-// enough for display purposes on a leaderboard row; the precise multi-team breakdown
-// still shows correctly on that player's own year-by-year page).
+
 function groupFieldingSplitsByPlayer(splits) {
   const groups = new Map()
   for (const split of splits) {

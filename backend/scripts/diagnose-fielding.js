@@ -1,17 +1,5 @@
 #!/usr/bin/env node
-// Fielding-stats diagnostic — run this yourself, from wherever your backend actually
-// runs (your local machine or your server), NOT from Claude's sandbox, which has no
-// network access to statsapi.mlb.com and can't run this test itself.
-//
-// This calls the exact same function your /api/players/:id route uses
-// (mlbClient.js's getPersonSeasonStats), with group='fielding', for a real player, and
-// prints exactly what comes back — so we can see the ACTUAL response shape instead of
-// guessing from code review.
-//
-// Run from the backend/ folder:
-//   node scripts/diagnose-fielding.js
-//   node scripts/diagnose-fielding.js <playerId> <season>   (optional — defaults to
-//     Aaron Judge, 592450, and the current year)
+
 
 import * as mlb from '../mlbClient.js'
 

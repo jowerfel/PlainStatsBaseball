@@ -28,9 +28,8 @@ export function inningsPitchedToDecimal(ip) {
   return whole + thirds / 3
 }
 
-// Custom JWins formulas (Joshua's own, not a published sabermetric source — the MLB
-// Stats API doesn't publish WAR at all, which is why the site's WAR column was always
-// blank before this). The actual math and every tunable weight lives in jwinsFormula.js —
+// Custom JWins formulas
+// The actual math and every tunable weight lives in jwinsFormula.js —
 // this file just adapts the MLB API's stat-object shape into what those formulas expect
 // and attaches the result under the field name each view reads. Both players.js and
 // leaderboards.js call attachJWins so a player's JWins reads the same on their own page,

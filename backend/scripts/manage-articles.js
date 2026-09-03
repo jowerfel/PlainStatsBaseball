@@ -1,21 +1,5 @@
 // Article management CLI — the ONLY way to add or delete articles.//
-// Adding/deleting used to be public HTTP endpoints (POST/DELETE /api/articles), but
-// Joshua asked for "only I can add and delete" once the site is actually published. An
-// HTTP endpoint reachable by anyone who knows the URL can't guarantee that — even with a
-// hidden "admin" button in the frontend, the underlying POST/DELETE routes are still
-// callable directly with curl by anyone. The only way to actually make this owner-only is
-// to not expose it over the network at all: this script talks straight to articlesStore.js
-// (the same file the server itself reads from) and only runs locally, in your own
-// terminal, with your own filesystem access — there's nothing for the public site to attack.
-//
-// Run these from the backend/ folder (so relative PDF paths resolve the way you'd expect):
-//
-//   node scripts/manage-articles.js add "Trade Deadline Preview" ./drafts/deadline.pdf
-//   node scripts/manage-articles.js list
-//   node scripts/manage-articles.js delete <article-id>
-//
-// "list" is there so you can find an article's id before deleting it — the public site
-// intentionally doesn't show ids anywhere.
+
 
 import fs from 'fs'
 import path from 'path'

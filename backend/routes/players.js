@@ -138,18 +138,7 @@ router.get('/:id', async (req, res) => {
       fieldingExtracted?.positionSplits,
     )
 
-    // CAREER FIELDING BUG FIX: for career mode, fieldingStats.war_fielding above is
-    // WRONG — extractFieldingSeasonTotal/mergeDerivedStats treats the whole career as if
-    // it were ONE season, so a career's worth of innings (e.g. 21,785 for a 19-year
-    // everyday shortstop) gets capped at the SAME single-season positional-value proration
-    // (capped at fullSeasonInnings = 1350, see jwinsFormula.js) that a single real season
-    // gets. That silently throws away 18 of 19 seasons' worth of positional value instead
-    // of correctly adding each season's own (correctly capped) positional bonus — which is
-    // exactly why summing the Year by Year table's JWinsF column gives a completely
-    // different, much bigger number than the "Career At A Glance" total did. The fix:
-    // build the career fielding total by fetching year-by-year data (the same call the
-    // Year by Year table itself uses) and summing each season's OWN correctly-prorated
-    // JWinsF — never compute JWinsF directly against career-totaled counting stats.
+    
     let fieldingStatsFixed = fieldingStats
     if (season === 'career' && fieldingStats) {
       const yearByYearFieldingData = await cached(

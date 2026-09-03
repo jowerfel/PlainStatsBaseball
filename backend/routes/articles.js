@@ -3,22 +3,7 @@ import { listArticles, getArticle, addLike, removeLike, addView } from '../artic
 
 const router = Router()
 
-// Read-only + like/view/unlike API. There is no create or delete route here at all —
-// adding an article is dropping a .md file into backend/articles/, and deleting one is
-// removing that file. An HTTP endpoint that could create/delete articles would be
-// reachable by anyone on the public internet, not just Joshua — a plain folder on the
-// server's own filesystem has no such exposure.
-//
-// Articles are identified by filename (URL-encoded in the :filename param) rather than a
-// generated id, since the filename IS the identity now — there's no database row to
-// generate an id for.
-//
-// Likes and views are per-visitor (see articlesStore.js's big comment for what "visitor"
-// means on a site with no accounts) — every like/view/unlike request needs an
-// x-visitor-id header identifying who's asking, generated and persisted client-side in
-// localStorage (see frontend/src/services/visitorId.js). Not a header a user could
-// realistically be expected to forge by accident, but also not remotely tamper-proof —
-// same trust level as the rest of this site's local-storage-based features.
+
 function getVisitorId(req) {
   const id = req.get('x-visitor-id')
   return typeof id === 'string' && id.trim() ? id.trim() : null

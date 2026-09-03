@@ -1,7 +1,6 @@
 # Adding articles
 
-To publish an article, add a `.md` (Markdown) file to this folder. That's it — no
-command to run, nothing else to touch. The site picks it up automatically.
+To publish an article, add a `.md` (Markdown) file to this folder. =
 
 To remove an article, delete its `.md` file from this folder.
 

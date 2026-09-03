@@ -1,30 +1,5 @@
 // Storage for the News Articles feature.
 //
-// The article itself — title and content — lives as a plain .md file dropped into
-// backend/articles/. That folder IS the source of truth for which articles exist: adding
-// an article is just saving a new .md file there, and deleting one is just removing the
-// file. No command to run, no ids to look up first.
-//
-// Likes and views can't live in the .md file itself (there's nowhere sensible to put a
-// mutable counter inside a content file that's meant to be hand-edited), so those are
-// tracked separately in a small JSON file keyed by filename. On every read, this scans
-// the articles folder and matches each file against its counters — a file with no
-// counters entry yet (a newly dropped-in article) gets one created on first read.
-//
-// Likes and views are tracked per-VISITOR, not as raw counters, so that one visitor can
-// only add one view and one like each (and can remove their like). There are no user
-// accounts anywhere on this site, so "visitor" here means an anonymous id the frontend
-// generates once and stores in localStorage (see frontend/src/services/visitorId.js) —
-// the same trust level as the rest of the site's local-storage-based features (followed
-// players, theme). This stops the obvious case (the same person clicking like five times,
-// or a page reload inflating the view count every time), not a determined person clearing
-// their browser storage or using a different browser — there's no way to fully solve that
-// without real accounts, which this site doesn't have.
-//
-// This is NOT the SQLite setup described in db/schema.sql — that's for the Statcast
-// pipeline and isn't wired up anywhere in this codebase yet (see statcastStore.js). A
-// folder of files plus a small JSON counters sidecar is the right-sized tool for what's
-// fundamentally a handful of articles.
 
 import fs from 'fs'
 import path from 'path'

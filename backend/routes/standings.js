@@ -6,12 +6,7 @@ const router = Router()
 
 // GET /api/standings?season=2026&leagueId=103,104
 //
-// Fetches BOTH division standings (standingsTypes=regularSeason, the default the API
-// returns when no standingsTypes is passed) and wild card standings (standingsTypes=
-// wildCard) in parallel. Confirmed against the MLB Stats API's own `standingsTypes` meta
-// list and the community wrapper docs (toddrob99/MLB-StatsAPI) that `wildCard` is a real,
-// supported value returning wildCardRank/wildCardGamesBack/wildCardEliminationNumber per
-// team, split into the two leagues rather than by division.
+
 router.get('/', async (req, res) => {
   const season = req.query.season || new Date().getFullYear()
   const leagueId = req.query.leagueId || '103,104'

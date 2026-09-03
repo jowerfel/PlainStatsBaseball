@@ -17,16 +17,7 @@ const FACET_TO_GROUP_AND_STAT = {
   fielding: { group: 'fielding', stat: 'war_fielding' },
 }
 
-// Fetches one season's leaderboard for a single facet (batting/pitching/fielding) and
-// returns { playerId, playerName, teamName, jwins } rows, sorted highest JWins first.
-// Shared by /best-single-season below, which needs exactly this "one season, one facet,
-// ranked" shape repeated across many years.
-//
-// A completed past season's stats never change, so those are cached far longer (24h) than
-// the current, still-in-progress season (5min, same as the rest of this app's caching) —
-// without that distinction, /best-single-season would re-fetch ~30 historical seasons
-// worth of data every 5 minutes for no reason, since only the current year's numbers can
-// actually move.
+
 async function fetchFacetSeasonRows(facet, season) {
   const { group, stat } = FACET_TO_GROUP_AND_STAT[facet]
   const isCurrentSeason = Number(season) === new Date().getFullYear()
@@ -85,26 +76,7 @@ async function fetchFacetSeasonRows(facet, season) {
     .sort((a, b) => b.jwins - a.jwins)
 }
 
-// Builds a CAREER fielding leaderboard by summing each player's JWinsF across many
-// individual SEASON leaderboards, instead of asking MLB's API for one aggregate
-// "stats=career&group=fielding" leaderboard directly.
-//
-// Why: that direct career+fielding leaderboard query appears to leave out most players
-// who didn't play recently — Ozzie Smith (retired 1996) and other older Hall of Famers
-// don't show up in it at all, even though the exact same player's PER-PLAYER career
-// fielding stats (routes/players.js, a completely different MLB endpoint) come back
-// correct and complete. Rather than depend on that one endpoint working right (which,
-// after real investigation, it doesn't for career+fielding specifically), this route
-// builds the career total itself from season-by-season data, the same season-mode
-// fielding leaderboard call that DOES work correctly (confirmed: current/recent players
-// show up on it fine). Each season's JWinsF was already correctly computed with that
-// season's own innings-prorated positional bonus, so summing the per-season numbers is a
-// valid career total — no double-counting or re-derivation needed.
-//
-// This is deliberately capped and heavily cached (like /best-single-season) since it's
-// the same "many years x one upstream call each" shape. CAREER_FIELDING_YEARS_BACK
-// caps how far back this goes for the same reason /best-single-season caps at 60 —
-// literally every MLB season back to 1876 would mean 100+ upstream calls per request.
+
 const CAREER_FIELDING_YEARS_BACK = 60
 
 async function buildFieldingCareerLeaderboard() {
@@ -137,10 +109,7 @@ async function buildFieldingCareerLeaderboard() {
   return [...careerTotals.values()].sort((a, b) => b.jwins - a.jwins)
 }
 
-// Fetches one season's JWins Complete leaderboard — batting + pitching + fielding merged
-// by player, same logic as the /complete route below, factored out so
-// /best-single-season can call it per-year too (see fetchFacetSeasonRows for the same
-// pattern applied to a single facet).
+
 async function fetchCompleteSeasonRows(season) {
   const isCurrentSeason = Number(season) === new Date().getFullYear() || season === 'career'
   const ttl = isCurrentSeason ? 5 * 60 * 1000 : 24 * 60 * 60 * 1000
@@ -186,15 +155,7 @@ async function fetchCompleteSeasonRows(season) {
     upsert(playerId, split.player?.fullName, split.team?.name).pitching = mergedStat.war_pitching
   }
 
-  // FIELDING: career mode does NOT use MLB's direct "stats=career&group=fielding"
-  // leaderboard query — confirmed, that query excludes most players who didn't play
-  // recently (Ozzie Smith and other older Hall of Famers are simply absent from it,
-  // despite their own per-player career fielding stats being complete and correct via a
-  // different MLB endpoint). Instead, career fielding here is built by summing each
-  // player's JWinsF across many individual season leaderboards (see
-  // buildFieldingCareerLeaderboard) — the season-mode fielding leaderboard call IS
-  // confirmed working correctly. Season mode (a specific year) still uses the direct
-  // single-season call, which isn't affected by this issue.
+  
   if (season === 'career') {
     const fieldingCareerRows = await cached(
       `jwins-fielding-career-totals:${CAREER_FIELDING_YEARS_BACK}`,
@@ -263,15 +224,7 @@ async function fetchCompleteSeasonRows(season) {
 // GET /api/jwins/complete?season=2026&limit=50
 // GET /api/jwins/complete?season=career&limit=50
 //
-// JWins Complete combines a player's batting, pitching, AND fielding JWins into one
-// number (see computeJWinsComplete in jwinsFormula.js) — but the MLB Stats API has no
-// single endpoint that returns all three facets for every player at once, and the
-// regular /api/leaderboard route only ever pulls ONE group per request. So this fetches
-// large hitting, pitching, and fielding pools independently (same POOL_SIZE approach and
-// reasoning as routes/leaderboards.js — see that file's big comment on why 3000, not a
-// smaller number, is needed to not silently exclude the true leader), merges them by
-// player id, computes each player's JWins Complete from whichever components they
-// actually have data for, and sorts by that.
+
 router.get('/complete', async (req, res) => {
   const season = req.query.season || new Date().getFullYear()
   const limit = Math.min(Number(req.query.limit) || 50, POOL_SIZE)
@@ -299,15 +252,7 @@ router.get('/complete', async (req, res) => {
 })
 
 // GET /api/jwins/best-single-season?facet=batting&years=30&limit=50
-//
-// The best individual PLAYER-SEASON performances for one JWins facet — e.g. "what's the
-// single greatest batting JWins season anyone has ever had," not "who's good this year."
-// Scans multiple past seasons (not literally every MLB season back to 1876 — that would
-// mean 150+ upstream API calls per request; `years` caps how far back to look, default 30
-// and capped at 60, a real scope limit that's stated plainly in the response rather than
-// silently pretending this is exhaustive all-time history) and keeps the single best
-// season-row per player across that whole window (so one all-time great isn't just
-// filling the entire top 10 with 8 of their own seasons), then ranks by JWins.
+
 router.get('/best-single-season', async (req, res) => {
   const facet = ['pitching', 'fielding', 'complete'].includes(req.query.facet) ? req.query.facet : 'batting'
   const yearsBack = Math.min(Number(req.query.years) || 30, 60)
@@ -323,13 +268,7 @@ router.get('/best-single-season', async (req, res) => {
         const seasonResults = await Promise.all(
           Array.from({ length: yearsBack }, (_, i) => startYear + i).map(async (year) => {
             try {
-              // Complete needs 3 upstream calls PER YEAR (hitting+pitching+fielding
-              // pools) instead of 1, same as a single /complete request — 30 years of
-              // that is 90 calls for one page load, which is genuinely heavy. It's
-              // allowed here because Joshua asked for it directly, but it's the reason
-              // this whole result is cached (see the 5min wrapper above) rather than
-              // re-run on every request, and why yearsBack is capped at 60 regardless of
-              // facet.
+              
               const rows =
                 facet === 'complete' ? await fetchCompleteSeasonRows(year) : await fetchFacetSeasonRows(facet, year)
               return rows.slice(0, 25).map((r) => ({ ...r, season: year })) // top 25/season is plenty to find the all-time best
