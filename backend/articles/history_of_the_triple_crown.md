@@ -4,7 +4,7 @@
 
 A hitter wins the Triple Crown by leading his league in **batting average, home runs, and RBIs** in the same season. It is one of baseball's most famous accomplishments—and one of its rarest.
 
-Since 1878, the MLB record books recognize 15 hitters who have won 16 batting Triple Crowns, with **Ted Williams and Rogers Hornsby winning twice**. The most recent was **Miguel Cabrera in 2012**.
+Since 1878, 15 hitters who have won 16 batting Triple Crowns, with **Ted Williams and Rogers Hornsby winning twice**. The most recent was **Miguel Cabrera in 2012**.
 
 ## Every MLB Triple Crown Winner
 
@@ -33,7 +33,7 @@ Since 1878, the MLB record books recognize 15 hitters who have won 16 batting Tr
 
 The first recognized MLB Triple Crown came in **1878**, when Paul Hines of the Providence Grays led the National League with a .358 average, 4 home runs, and 50 RBIs.
 
-Baseball looked very different then. Four home runs was enough to lead the league, showing just how much the game has changed.
+Baseball was a very different sport then. Four home runs was enough to lead the league, showing just how much the game has changed.
 
 ## The Triple Crown Era
 
@@ -55,13 +55,9 @@ Mantle's **52 home runs** are the most in an MLB Triple Crown season. Gehrig's *
 
 Carl Yastrzemski won the Triple Crown in **1967** with a .326 average, 44 home runs, and 121 RBIs.
 
-Then… nothing.
-
 For **45 years**, nobody did it again.
 
 That drought ended in 2012 when **Miguel Cabrera** became the first player since Yastrzemski to win all three categories. Cabrera hit **.330 with 44 home runs and 139 RBIs** for the Detroit Tigers.
-
-His closest competition in the batting race was Mike Trout, who finished at **.326**—just four points behind Cabrera.
 
 ## Why Is It So Hard?
 
@@ -73,24 +69,6 @@ The Triple Crown requires three completely different kinds of offensive dominanc
 
 **Drive in runs** — finish at the top of the RBI leaderboard, which also depends partly on having runners on base.
 
-A player can dominate two categories and still lose the Triple Crown.
+A player lead the league in two categories and still lose the Triple Crown.
 
 That's what makes it special.
-
-## The Drought Continues
-
-As of 2026, Cabrera's 2012 season remains the most recent MLB batting Triple Crown.
-
-The gap from **1967 to 2012 was 45 seasons**. Now the sport has gone even longer without another one.
-
-The Triple Crown isn't just about being a great hitter. It means being the **best in three of baseball's biggest offensive categories at exactly the same time**.
-
-And that's why the Triple Crown remains one of baseball's ultimate statistical achievements.
-
-## Quick Triple Crown Facts
-
-- 🏆 **Most recent winner:** Miguel Cabrera, 2012
-- 🔁 **Most wins by one MLB player:** 2 — Ted Williams and Rogers Hornsby
-- 💥 **Most HR in a Triple Crown season:** Mickey Mantle, 52
-- 📈 **Highest batting average in an MLB Triple Crown season:** Hugh Duffy, .440
-- ⏳ **Longest gap between MLB Triple Crowns:** 45 seasons, 1967–2012

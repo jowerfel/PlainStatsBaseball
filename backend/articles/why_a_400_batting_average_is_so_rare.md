@@ -1,12 +1,10 @@
 # Why a .400 Batting Average Is So Rare
 
-A .400 batting average sounds simple: get a hit in 4 out of every 10 at-bats.
+Baseball is the only sport where you can fail 6 times out of ten and be one of the greatest of all time.
 
-In a full MLB season, though, it is almost impossible.
+But then why doesn't anybody hit over 400 anymore?
 
-The last player to finish a season above .400 was **Ted Williams in 1941**, when the Boston Red Sox star hit **.406**. He went **185-for-456**, meaning he got a hit in more than 40% of his official at-bats.
-
-And nobody has done it since.
+The last player to finish a season above .400 was **Ted Williams in 1941**, when the Boston Red Sox star hit **.406**. He went **185-for-456** that year.
 
 ## .400 Is a Small Margin
 
@@ -20,9 +18,9 @@ A hitter batting:
 
 Over 500 at-bats, a .400 hitter would need about **200 hits**.
 
-But one bad stretch can destroy the chase. A player who goes 2-for-20 loses 18 percentage points compared with a perfect .400 pace.
+But one slump can destroy the year. A player who goes 2-for-20 loses 18 percentage points compared with a perfect .400 pace.
 
-That's the problem: a season is **six months and hundreds of at-bats**. There are slumps, injuries, elite pitchers, tough defensive plays and plain bad luck.
+That's the problem: a season is **six months and hundreds of at-bats**. There are slumps, injuries, and plain bad luck.
 
 ## Ted Williams Was Ridiculously Consistent
 
@@ -45,21 +43,19 @@ He also led the American League in batting average, home runs, runs, RBI, walks,
 
 ## The Closest Calls
 
-Several hitters have come incredibly close since Williams.
+Several hitters have come pretty close since Williams.
 
 **Tony Gwynn hit .394 in 1994**, but the season was shortened by the players' strike. **George Brett hit .390 in 1980**, and **Rod Carew hit .388 in 1977**. 
 
-Brett's .390 season is especially painful. He actually reached **.400 on September 20**, but finished the season five hits short of the mark. citeturn0search2
+Brett's .390 season is especially painful. He actually reached **.400 on September 20**, but finished the season five hits short of the mark.
 
-That's what makes .400 so brutal: you can be one of the greatest hitters ever, spend part of the season above .400, and still finish without it.
+That's why hitting 0.400 is so hard. You could be one of the greatest hitters ever, spend part of the season above .400, and still finish without it.
 
 ## Why Is It Getting Harder?
 
-Modern baseball is filled with specialized pitchers throwing harder than ever, advanced scouting, defensive positioning and pitchers attacking hitters with carefully designed repertoires.
+The entire idea of baseball hitting has changed a lot of the past 80 years. Now, players are more focused on hitting homeruns rather than hitting for contact.
 
-And batting average itself is unforgiving.
 
-A walk doesn't help your average. A hard-hit ball caught at the warning track doesn't help. A perfectly hit line drive that happens to go directly at a fielder counts exactly the same as a weak grounder for batting average purposes: **0-for-1**.
 
 A .400 hitter therefore needs both **elite hitting skill and a huge amount of consistency and luck**.
 

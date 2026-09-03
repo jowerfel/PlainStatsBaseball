@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { getLeaderboard, getJWinsComplete, getJWinsBestSingleSeason } from '@/services/mlbApi.js'
 import { formatStatValue } from '@/data/statDictionary.js'
 import StatTable from '@/components/StatTable.vue'
-import JWinsBattingPitchingChart from '@/components/JWinsBattingPitchingChart.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -282,8 +281,13 @@ onMounted(load)
         <template v-if="facet === 'complete'">{{ formatStatValue('war', leader.jwinsComplete) }} JWins Complete</template>
         <template v-else>{{ formatStatValue(facet === 'pitching' ? 'war_pitching' : facet === 'fielding' ? 'war_fielding' : 'war', leader.jwins) }} {{ facetLabel }}</template>
       </p>
-      <!--<JWinsBattingPitchingChart v-if="facet === 'complete'" :rows="rows" />-->
-      <StatTable :columns="columns" :rows="displayRows" />
+      <!-- No on-header-click passed: these rows are already a server-picked top-N,
+           ranked leaderboard slice, not a full dataset — StatTable's own comment (see
+           components/StatTable.vue) explains why re-sorting just the visible rows by a
+           different column, or flipping to ascending, would misrepresent the real
+           ranking instead of showing genuine "least" leaders. Disabled outright by
+           NOT wiring up onHeaderClick, so clicking a header does nothing here. -->
+      <StatTable :columns="columns" :rows="displayRows" :on-header-click="() => {}" />
     </template>
   </div>
 </template>

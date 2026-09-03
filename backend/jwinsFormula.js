@@ -91,16 +91,16 @@ export const JWINS_WEIGHTS = {
     // — see putoutExcludedPositions and computeJWinsFielding for why.
     defaultCounting: { putOuts: 0.2, assists: 0.2, errors: -0.2 },
     countingByPosition: {
-      C: { putOuts: 0.2, assists: 0.2, errors: -0.4 },
-      '1B': { putOuts: 0.2, assists: 0.2, errors: -0.4 },
-      '2B': { putOuts: 0.2, assists: 0.1, errors: -0.4 },
-      SS: { putOuts: 0.2, assists: 0.1, errors: -0.6 },
-      '3B': { putOuts: 0.2, assists: 0.1, errors: -0.4 },
-      LF: { putOuts: 0.2, assists: 0.35, errors: -0.4 },
-      CF: { putOuts: 0.2, assists: 0.35, errors: -0.4 },
-      RF: { putOuts: 0.2, assists: 0.35, errors: -0.4 },
-      DH: { putOuts: 0.2, assists: 0.2, errors: -0.4 },
-      P: { putOuts: 0.2, assists: 0.2, errors: -0.4 },
+      C: { putOuts: 0.2, assists: 0.2, errors: -0.6 },
+      '1B': { putOuts: 0.2, assists: 0.2, errors: -0.6 },
+      '2B': { putOuts: 0.2, assists: 0.1, errors: -0.6 },
+      SS: { putOuts: 0.2, assists: 0.1, errors: -0.8 },
+      '3B': { putOuts: 0.2, assists: 0.1, errors: -0.6 },
+      LF: { putOuts: 0.2, assists: 0.35, errors: -0.6 },
+      CF: { putOuts: 0.2, assists: 0.35, errors: -0.6 },
+      RF: { putOuts: 0.2, assists: 0.35, errors: -0.6 },
+      DH: { putOuts: 0.2, assists: 0.2, errors: -0.6 },
+      P: { putOuts: 0.2, assists: 0.2, errors: -0.6 },
     },
     // Bonus weights for catcher-specific plays that stand in for excluded putouts — new,
     // deliberately modest starting values (turning a DP or throwing out a runner is rarer
@@ -109,7 +109,18 @@ export const JWINS_WEIGHTS = {
     catcherDoublePlayBonus: 1.5,
     caughtStealingBonus: 1.0,
     passedBallPenalty: -0.7,
-    divisor: 200,
+    divisor: 20,
+    // Applied to the WHOLE JWinsF result (counting-stat portion + positional value)
+    // at the very end, AFTER the two are added together — separate from `divisor` above,
+    // which only scales the counting-stat term. The reason for two separate divisors:
+    // `divisor` controls the balance BETWEEN counting stats and positional value (raise
+    // it and positional value dominates more; lower it and counting stats matter more
+    // relative to position) — but changing it also shifts JWinsF's overall size relative
+    // to JWinsB/JWinsP, since positional value isn't divided by it at all. finalDivisor
+    // lets the overall JWinsF scale be tuned back to match batting/pitching independently,
+    // without having to re-balance counting-stats-vs-position every time. Set to 1 (a
+    // no-op) until tuned — start here.
+    finalDivisor: 4,
     // A full defensive season, in innings (150 games * 9 innings — the standard
     // sabermetric full-season baseline, matching how a "150 game season" full-time
     // player is usually described). positionalRunValue below is PRORATED against this:
@@ -276,8 +287,15 @@ export function computeJWinsFielding(stat, position) {
   // by innings played at this position (see positionalRunValue) — `stat.innings` is
   // reported the same "whole.thirds" way as pitching IP (e.g. "63.1" = 63 and 1/3), so
   // it goes through the same conversion used everywhere else on this site.
+  //
+  // finalDivisor is applied LAST, to the sum of both terms — see the comment on
+  // finalDivisor in JWINS_WEIGHTS.fielding for why this is a separate knob from
+  // `divisor` above: `divisor` balances counting-stats-vs-positional-value against each
+  // other, finalDivisor scales the combined result to match JWinsB/JWinsP's overall size,
+  // and changing one shouldn't force re-tuning the other.
   const innings = inningsToDecimal(stat.innings)
-  return countingRaw / w.divisor + positionalRunValue(position, innings)
+  const beforeFinalDivisor = countingRaw / w.divisor + positionalRunValue(position, innings)
+  return beforeFinalDivisor / w.finalDivisor
 }
 
 // For a season where a player appeared at multiple positions, JWinsF can't just be

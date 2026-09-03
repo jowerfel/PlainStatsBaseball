@@ -25,50 +25,6 @@ const jwinsFielding = statDictionary.war_fielding
       adjustable on the <RouterLink to="/settings">Settings page</RouterLink>.
     </p>
   </div>
-
-  <div class="section">
-    <h2>Custom stats</h2>
-    <p class="muted">
-      These aren't official MLB stats — they're formulas built specifically for this
-      site. See the dedicated <RouterLink to="/jwins">JWins page</RouterLink> for career,
-      single-season, and combined leaderboards.
-    </p>
-
-    <h3>{{ jwinsBatting.simpleName }} (batting)</h3>
-    <p>{{ jwinsBatting.shortExplain }}</p>
-    <p class="muted">{{ jwinsBatting.extraExplain }}</p>
-
-    <h3>{{ jwinsPitching.simpleName }} (pitching)</h3>
-    <p>{{ jwinsPitching.shortExplain }}</p>
-    <p class="muted">{{ jwinsPitching.extraExplain }}</p>
-
-    <h3>{{ jwinsFielding.simpleName }} (fielding)</h3>
-    <p>{{ jwinsFielding.shortExplain }}</p>
-    <p class="muted">{{ jwinsFielding.extraExplain }}</p>
-
-    <h3>JWins Complete</h3>
-    <p>
-      One number combining a player's batting, pitching, and fielding JWins for a season —
-      whichever of those three they actually have data for. A batting-only player's
-      Complete is just their JWinsB; a two-way player's is JWinsB + JWinsP (+ JWinsF, if
-      they have fielding innings too).
-    </p>
-    <p class="muted">
-      Every weight behind all four of these lives in one place —
-      <code>backend/jwinsFormula.js</code> — so trying a different value is a one-line
-      edit there, not a hunt through the codebase.
-    </p>
-
-    <template v-for="stat in CUSTOM_STATS" :key="stat.key">
-      <h3>{{ stat.name }}</h3>
-      <p>{{ stat.shortExplain }}</p>
-      <p class="muted">Formula: <code>{{ stat.formula }}</code></p>
-      <p class="muted">
-        Shows up in the leaderboard pages, not on individual player pages.
-      </p>
-    </template>
-  </div>
-
   <div class="section">
     <h2>What this site stores about you</h2>
     <p>

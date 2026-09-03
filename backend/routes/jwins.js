@@ -85,6 +85,58 @@ async function fetchFacetSeasonRows(facet, season) {
     .sort((a, b) => b.jwins - a.jwins)
 }
 
+// Builds a CAREER fielding leaderboard by summing each player's JWinsF across many
+// individual SEASON leaderboards, instead of asking MLB's API for one aggregate
+// "stats=career&group=fielding" leaderboard directly.
+//
+// Why: that direct career+fielding leaderboard query appears to leave out most players
+// who didn't play recently — Ozzie Smith (retired 1996) and other older Hall of Famers
+// don't show up in it at all, even though the exact same player's PER-PLAYER career
+// fielding stats (routes/players.js, a completely different MLB endpoint) come back
+// correct and complete. Rather than depend on that one endpoint working right (which,
+// after real investigation, it doesn't for career+fielding specifically), this route
+// builds the career total itself from season-by-season data, the same season-mode
+// fielding leaderboard call that DOES work correctly (confirmed: current/recent players
+// show up on it fine). Each season's JWinsF was already correctly computed with that
+// season's own innings-prorated positional bonus, so summing the per-season numbers is a
+// valid career total — no double-counting or re-derivation needed.
+//
+// This is deliberately capped and heavily cached (like /best-single-season) since it's
+// the same "many years x one upstream call each" shape. CAREER_FIELDING_YEARS_BACK
+// caps how far back this goes for the same reason /best-single-season caps at 60 —
+// literally every MLB season back to 1876 would mean 100+ upstream calls per request.
+const CAREER_FIELDING_YEARS_BACK = 60
+
+async function buildFieldingCareerLeaderboard() {
+  const currentYear = new Date().getFullYear()
+  const startYear = currentYear - CAREER_FIELDING_YEARS_BACK + 1
+
+  const seasonResults = await Promise.all(
+    Array.from({ length: CAREER_FIELDING_YEARS_BACK }, (_, i) => startYear + i).map(async (year) => {
+      try {
+        return await fetchFacetSeasonRows('fielding', year)
+      } catch (err) {
+        console.error(`buildFieldingCareerLeaderboard: failed to fetch ${year}:`, err.message)
+        return []
+      }
+    }),
+  )
+
+  const careerTotals = new Map() // playerId -> { playerId, playerName, teamName, jwins }
+  for (const seasonRows of seasonResults) {
+    for (const row of seasonRows) {
+      if (!careerTotals.has(row.playerId)) {
+        careerTotals.set(row.playerId, { ...row, jwins: 0 })
+      }
+      const entry = careerTotals.get(row.playerId)
+      entry.jwins += row.jwins
+      entry.teamName = row.teamName // most-recent-season team, good enough for display
+    }
+  }
+
+  return [...careerTotals.values()].sort((a, b) => b.jwins - a.jwins)
+}
+
 // Fetches one season's JWins Complete leaderboard — batting + pitching + fielding merged
 // by player, same logic as the /complete route below, factored out so
 // /best-single-season can call it per-year too (see fetchFacetSeasonRows for the same
@@ -93,15 +145,12 @@ async function fetchCompleteSeasonRows(season) {
   const isCurrentSeason = Number(season) === new Date().getFullYear() || season === 'career'
   const ttl = isCurrentSeason ? 5 * 60 * 1000 : 24 * 60 * 60 * 1000
 
-  const [hittingData, pitchingData, fieldingData] = await Promise.all([
+  const [hittingData, pitchingData] = await Promise.all([
     cached(`jwins-pool:hitting:${season}`, ttl, () =>
       mlb.getSeasonLeaderboard({ season, group: 'hitting', limit: POOL_SIZE }),
     ),
     cached(`jwins-pool:pitching:${season}`, ttl, () =>
       mlb.getSeasonLeaderboard({ season, group: 'pitching', limit: POOL_SIZE }),
-    ),
-    cached(`jwins-pool:fielding:${season}`, ttl, () =>
-      mlb.getSeasonLeaderboard({ season, group: 'fielding', limit: POOL_SIZE }),
     ),
   ])
 
@@ -137,32 +186,55 @@ async function fetchCompleteSeasonRows(season) {
     upsert(playerId, split.player?.fullName, split.team?.name).pitching = mergedStat.war_pitching
   }
 
-  // Fielding pool needs the same multi-position-per-player grouping as the regular
-  // leaderboard route (see routes/leaderboards.js's groupFieldingSplitsByPlayer for the
-  // full reasoning) before JWinsF can be computed correctly per player.
-  const fieldingSplits = fieldingData.stats?.[0]?.splits || []
-  const fieldingGroups = new Map()
-  for (const split of fieldingSplits) {
-    const playerId = split.player?.id
-    if (!playerId) continue
-    if (!fieldingGroups.has(playerId)) {
-      fieldingGroups.set(playerId, { player: split.player, team: split.team, entries: [] })
+  // FIELDING: career mode does NOT use MLB's direct "stats=career&group=fielding"
+  // leaderboard query — confirmed, that query excludes most players who didn't play
+  // recently (Ozzie Smith and other older Hall of Famers are simply absent from it,
+  // despite their own per-player career fielding stats being complete and correct via a
+  // different MLB endpoint). Instead, career fielding here is built by summing each
+  // player's JWinsF across many individual season leaderboards (see
+  // buildFieldingCareerLeaderboard) — the season-mode fielding leaderboard call IS
+  // confirmed working correctly. Season mode (a specific year) still uses the direct
+  // single-season call, which isn't affected by this issue.
+  if (season === 'career') {
+    const fieldingCareerRows = await cached(
+      `jwins-fielding-career-totals:${CAREER_FIELDING_YEARS_BACK}`,
+      24 * 60 * 60 * 1000,
+      () => buildFieldingCareerLeaderboard(),
+    )
+    for (const row of fieldingCareerRows) {
+      upsert(row.playerId, row.playerName, row.teamName).fielding = row.jwins
     }
-    fieldingGroups.get(playerId).entries.push({
-      stat: split.stat,
-      position: split.position?.abbreviation || split.stat?.position?.abbreviation || null,
-    })
-  }
-  for (const g of fieldingGroups.values()) {
-    const jwinsF =
-      g.entries.length > 1
-        ? computeJWinsFieldingForSeason(g.entries)
-        : (() => {
-            const stat = { ...g.entries[0].stat }
-            attachWar(stat, 'fielding', g.entries[0].position)
-            return stat.war_fielding
-          })()
-    upsert(g.player.id, g.player.fullName, g.team?.name).fielding = jwinsF
+  } else {
+    const fieldingData = await cached(`jwins-pool:fielding:${season}`, ttl, () =>
+      mlb.getSeasonLeaderboard({ season, group: 'fielding', limit: POOL_SIZE }),
+    )
+    // Fielding pool needs the same multi-position-per-player grouping as the regular
+    // leaderboard route (see routes/leaderboards.js's groupFieldingSplitsByPlayer for the
+    // full reasoning) before JWinsF can be computed correctly per player.
+    const fieldingSplits = fieldingData.stats?.[0]?.splits || []
+    const fieldingGroups = new Map()
+    for (const split of fieldingSplits) {
+      const playerId = split.player?.id
+      if (!playerId) continue
+      if (!fieldingGroups.has(playerId)) {
+        fieldingGroups.set(playerId, { player: split.player, team: split.team, entries: [] })
+      }
+      fieldingGroups.get(playerId).entries.push({
+        stat: split.stat,
+        position: split.position?.abbreviation || split.stat?.position?.abbreviation || null,
+      })
+    }
+    for (const g of fieldingGroups.values()) {
+      const jwinsF =
+        g.entries.length > 1
+          ? computeJWinsFieldingForSeason(g.entries)
+          : (() => {
+              const stat = { ...g.entries[0].stat }
+              attachWar(stat, 'fielding', g.entries[0].position)
+              return stat.war_fielding
+            })()
+      upsert(g.player.id, g.player.fullName, g.team?.name).fielding = jwinsF
+    }
   }
 
   return [...merged.values()]
