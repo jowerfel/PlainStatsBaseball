@@ -1,6 +1,4 @@
-// Frontend service layer. Calls OUR Express backend (/api/...), which proxies and caches
-// the upstream MLB Stats API. Never call statsapi.mlb.com directly from the browser — that's
-// what the backend proxy is for (CORS, caching, combining sources later with Statcast data).
+
 
 import { getVisitorId } from './visitorId.js'
 

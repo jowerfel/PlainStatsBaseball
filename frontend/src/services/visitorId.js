@@ -1,15 +1,3 @@
-// A stable, anonymous, per-browser id — used ONLY so the articles feature can recognize
-// "the same visitor" clicking like or opening an article twice, so likes/views count once
-// per person instead of once per click/reload (see backend/articlesStore.js's big comment
-// for the full reasoning). This site has no accounts and no cookies; this is the same
-// trust level and mechanism as the site's existing localStorage-based features (followed
-// players, theme) — a real person clearing their browser storage, or visiting from a
-// different browser/device, will look like a new visitor, and that's an accepted
-// limitation rather than a bug to fix (a full account system would be a much bigger
-// feature than "one like per person" calls for).
-//
-// Nothing here is sent anywhere except attached to article like/view requests — it isn't
-// a general-purpose tracking id and isn't used by anything else on the site.
 
 const STORAGE_KEY = 'plainstats.visitorId'
 

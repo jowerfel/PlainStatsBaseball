@@ -3,12 +3,6 @@ import { ref, computed } from 'vue'
 import { formatStatValue, getStatQuality, statDictionary } from '@/data/statDictionary.js'
 import StatTooltip from './StatTooltip.vue'
 
-// columns: [{ key: 'playerName', label: 'Player', isStat: false, link: (row) => '/players/1' }, ...]
-// rows: array of plain objects with flat keys matching column.key
-// onHeaderClick (optional): if provided, header clicks call this instead of doing the
-// built-in client-side sort. Use this when `rows` is already a server-picked slice (e.g. a
-// leaderboard's top-N by some stat) where re-sorting only the visible rows client-side would
-// silently misrepresent the true ranking for a different stat — see LeaderboardBuilderView.
 const props = defineProps({
   columns: { type: Array, required: true },
   rows: { type: Array, required: true },

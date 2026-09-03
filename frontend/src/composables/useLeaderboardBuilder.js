@@ -1,9 +1,4 @@
-// Shared logic behind the three individual Custom Leaderboard Builder pages (Batting,
-// Fielding, Pitching — see views/BattingLeaderboardView.vue etc.). Used to be one page
-// with a Hitting/Pitching/Fielding radio group; split into three separate pages/routes
-// per Joshua's request, but the actual builder behavior (stat picking, filters, sorting,
-// shareable links) is identical across all three, just locked to one group instead of
-// switchable — so that behavior lives here ONCE and each page just fixes `group`.
+
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getLeaderboard } from '@/services/mlbApi.js'

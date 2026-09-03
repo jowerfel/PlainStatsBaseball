@@ -57,7 +57,7 @@ onMounted(load)
   <p v-if="loading" class="muted">Loading standings&hellip;</p>
   <p v-else-if="errorMsg" class="error-text">
     {{ errorMsg }}
-    <template v-if="!backendHealthy"> Try restarting the backend and reloading the page.</template>
+    <template v-if="!backendHealthy"> <!--Try restarting the backend and reloading the page-->.</template>
   </p>
 
   <div v-else-if="records.length === 0" class="muted">No standings data available.</div>

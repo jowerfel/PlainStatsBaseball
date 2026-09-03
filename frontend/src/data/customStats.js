@@ -1,9 +1,7 @@
-// Custom stats — the "make your own stat like a Google Sheets formula" feature.
 //
 // HOW TO ADD A NEW STAT
 // ----------------------
-// Add one entry to the CUSTOM_STATS array below. That's it — nothing else in the app
-// needs to change. Each entry needs:
+// Add one entry to the CUSTOM_STATS array below. Each entry needs:
 //
 //   key         - a short unique id, letters/numbers/underscore only, e.g. 'myWeightedSlg'
 //   name        - what shows up in the leaderboard builder and headers, e.g. "wSLG"

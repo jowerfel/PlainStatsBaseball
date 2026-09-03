@@ -28,12 +28,7 @@ const jwinsFielding = statDictionary.war_fielding
   <div class="section">
     <h2>What this site stores about you</h2>
     <p>
-      PlainStats does not use cookies. Followed players/pitchers and your Settings choices
-      (background, text color, font) are saved using your browser's
-      <strong>local storage</strong> instead — a similar idea to a cookie, but the data
-      stays only in your own browser on this device. It is never sent to our server, never
-      shared with anyone else, and isn't used for tracking or advertising. Clearing your
-      browser's site data (or using a different browser/device) will reset it.
+      PlainStats does not use cookies.
     </p>
   </div>
 

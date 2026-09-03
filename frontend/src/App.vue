@@ -2,9 +2,6 @@
 import { ref } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
-// Not a cookie banner — PlainStats doesn't use cookies (see the About page) — but the
-// site does save data in the browser's local storage (followed players, Settings
-// choices), so this says so plainly on first visit rather than staying silent about it.
 const NOTICE_KEY = 'plainstats.storageNoticeSeen'
 const showNotice = ref(!localStorage.getItem(NOTICE_KEY))
 

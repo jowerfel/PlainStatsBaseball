@@ -8,8 +8,7 @@ const themeStore = useThemeStore()
   <h1>Settings</h1>
   <p class="subtitle">
     Change how PlainStats looks on this device. These are saved in your browser, so
-    they'll still be set the next time you visit — see the note about that on the
-    <RouterLink to="/about">About page</RouterLink>.
+    they'll still be set the next time you visit.
   </p>
 
   <div class="section">

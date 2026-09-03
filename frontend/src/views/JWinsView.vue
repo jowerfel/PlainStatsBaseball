@@ -211,11 +211,6 @@ onMounted(load)
 
 <template>
   <h1>JWins</h1>
-  <p class="subtitle">
-    PlainStats' own custom Wins Above Replacement — batting, pitching, fielding, or all
-    three combined. See the <RouterLink to="/about">About page</RouterLink> for exactly
-    how each is calculated.
-  </p>
 
   <div class="section" style="display: flex; gap: 16px; flex-wrap: wrap;">
     <label class="checkbox-row" style="display: inline; margin-right: 10px;">
@@ -281,12 +276,6 @@ onMounted(load)
         <template v-if="facet === 'complete'">{{ formatStatValue('war', leader.jwinsComplete) }} JWins Complete</template>
         <template v-else>{{ formatStatValue(facet === 'pitching' ? 'war_pitching' : facet === 'fielding' ? 'war_fielding' : 'war', leader.jwins) }} {{ facetLabel }}</template>
       </p>
-      <!-- No on-header-click passed: these rows are already a server-picked top-N,
-           ranked leaderboard slice, not a full dataset — StatTable's own comment (see
-           components/StatTable.vue) explains why re-sorting just the visible rows by a
-           different column, or flipping to ascending, would misrepresent the real
-           ranking instead of showing genuine "least" leaders. Disabled outright by
-           NOT wiring up onHeaderClick, so clicking a header does nothing here. -->
       <StatTable :columns="columns" :rows="displayRows" :on-header-click="() => {}" />
     </template>
   </div>

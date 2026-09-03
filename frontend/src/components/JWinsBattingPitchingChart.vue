@@ -1,15 +1,10 @@
+//Probably not used anymore
+
+
 <script setup>
 import { computed } from 'vue'
 
-// Plots batting JWins (x-axis) against pitching JWins (y-axis) for a set of players —
-// built specifically for JWins Complete, so hitters, pitchers, and two-way players are
-// all visible in the SAME chart at once instead of needing separate hitting/pitching
-// views. A pure hitter lands far right, near y=0. A pure pitcher lands far up, near x=0.
-// A real two-way player (or anyone with a little of both) shows up somewhere in between.
-//
-// No charting library — this is one small SVG built by hand, matching the rest of the
-// site's deliberately plain, no-dependency approach (see main.css's own comment about
-// staying bare-bones).
+
 const props = defineProps({
   rows: { type: Array, required: true }, // [{ playerName, batting, pitching }]
 })
