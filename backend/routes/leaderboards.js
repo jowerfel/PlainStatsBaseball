@@ -8,6 +8,7 @@ import {
   attachWar,
   sumFieldingStats,
   computeJWinsFieldingForSeason,
+  inningsPitchedToDecimal,
 } from '../derivedStats.js'
 
 const router = Router()
@@ -60,7 +61,15 @@ router.get('/', async (req, res) => {
       rows = rows.filter((r) => Number(r.stat?.plateAppearances || 0) >= minPA)
     }
     if (minIP !== null) {
-      rows = rows.filter((r) => Number(r.stat?.inningsPitched || 0) >= minIP)
+      // inningsPitched comes back from MLB as a "whole.thirds" string (e.g. "63.1" means
+      // 63 and 1/3 innings, NOT 63.1 decimal innings) — a plain Number() parse silently
+      // undercounts every pitcher's real innings, and worse, if this field is ever
+      // missing/undefined on a split, Number(undefined || 0) is 0, and 0 >= any positive
+      // minIP is always false — filtering out EVERY row instead of just being imprecise,
+      // which is exactly why this filter looked completely broken rather than just off.
+      // inningsPitchedToDecimal handles both: the real whole-thirds conversion, and a
+      // clean 0 fallback for missing data instead of a silent full wipeout.
+      rows = rows.filter((r) => inningsPitchedToDecimal(r.stat?.inningsPitched) >= minIP)
     }
     if (minInnings !== null) {
       
