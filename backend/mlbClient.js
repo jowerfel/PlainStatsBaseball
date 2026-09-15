@@ -80,6 +80,23 @@ export function getLiveGameFeed(gamePk) {
   return mlbGet(`/game/${gamePk}/feed/live`)
 }
 
+// Separate, lighter-weight endpoints for the same game data feed/live combines — used
+// instead of feed/live for a completed/historical game, since feed/live is documented as
+// the LIVE-in-progress firehose and can 404 for older completed games depending on the
+// gamePk, while these two dedicated endpoints are built to serve any game regardless of
+// how long ago it was played.
+export function getGameBoxscore(gamePk) {
+  return mlbGet(`/game/${gamePk}/boxscore`)
+}
+
+export function getGamePlayByPlay(gamePk) {
+  return mlbGet(`/game/${gamePk}/playByPlay`)
+}
+
+export function getGameLinescore(gamePk) {
+  return mlbGet(`/game/${gamePk}/linescore`)
+}
+
 export function getTeams(sportId = 1) {
   return mlbGet('/teams', { sportId })
 }

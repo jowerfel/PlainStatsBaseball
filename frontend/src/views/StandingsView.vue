@@ -30,8 +30,15 @@ async function load() {
   }
 }
 
+const showProjected = ref(false)
+
 function recordText(teamRecord) {
   return `${teamRecord.wins}-${teamRecord.losses}`
+}
+
+function projectedRecordText(teamRecord) {
+  const p = teamRecord.projectedRecord
+  return p ? `${p.wins}-${p.losses}` : recordText(teamRecord)
 }
 
 // Wild card leaders (rank 1-3, in each league) are already in a playoff spot; rank 4+ are
@@ -53,6 +60,22 @@ onMounted(load)
     <button type="submit" style="margin-left: 8px;">Refresh</button>
     <span v-if="lastLoaded" class="muted"> Last loaded {{ lastLoaded }}</span>
   </form>
+
+  <div style="margin: 10px 0;">
+    <label class="checkbox-row" style="display: inline; margin-right: 10px;">
+      <input type="radio" value="actual" :checked="!showProjected" @change="showProjected = false" />
+      Actual record
+    </label>
+    <label class="checkbox-row" style="display: inline;">
+      <input type="radio" value="projected" :checked="showProjected" @change="showProjected = true" />
+      Projected (162-game pace)
+    </label>
+  </div>
+  <p v-if="showProjected" class="muted">
+    Projected by scaling each team's current winning percentage to a full 162-game
+    season — a simple pace projection, not a model that accounts for schedule strength,
+    injuries, or anything else. Not shown for a season that's already complete.
+  </p>
 
   <p v-if="loading" class="muted">Loading standings&hellip;</p>
   <p v-else-if="errorMsg" class="error-text">
@@ -84,7 +107,7 @@ onMounted(load)
             <tr v-for="(team, teamIdx) in record.teamRecords" :key="team.teamId">
               <td>{{ team.divisionRank }}</td>
               <td>{{ team.abbreviation || team.teamName }}</td>
-              <td>{{ recordText(team) }}</td>
+              <td>{{ showProjected ? projectedRecordText(team) : recordText(team) }}</td>
               <td>{{ team.winPct }}</td>
               <td>{{ team.gamesBack || '—' }}</td>
               <td>{{ team.streak || '—' }}</td>
@@ -121,7 +144,7 @@ onMounted(load)
                 <tr :class="{ 'wc-cutoff-row': isLastWildCardSpot(team) }">
                   <td>{{ team.wildCardRank ?? '—' }}</td>
                   <td>{{ team.abbreviation || team.teamName }}</td>
-                  <td>{{ recordText(team) }}</td>
+                  <td>{{ showProjected ? projectedRecordText(team) : recordText(team) }}</td>
                   <td>{{ team.winPct }}</td>
                   <td>{{ team.wildCardGamesBack || '—' }}</td>
                 </tr>

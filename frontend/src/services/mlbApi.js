@@ -129,6 +129,10 @@ export function getLiveGames(date) {
   return apiGet(`/live${q}`)
 }
 
+export function getLiveGameDetail(gamePk) {
+  return apiGet(`/live/${gamePk}`)
+}
+
 export function getStandings(season) {
   const q = season ? `?season=${encodeURIComponent(season)}` : ''
   return apiGet(`/standings${q}`)

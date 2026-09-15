@@ -11,6 +11,7 @@ import {
   computeJWinsFieldingForSeason,
   computeJWinsComplete,
 } from '../derivedStats.js'
+import { projectSeasonStats } from '../projections.js'
 
 const router = Router()
 
@@ -176,12 +177,24 @@ router.get('/:id', async (req, res) => {
       fielding: fieldingStatsFixed?.war_fielding ?? null,
     })
 
+    // Projected stats — only meaningful for a SPECIFIC IN-PROGRESS season, never career
+    // (there's no such thing as "projecting" a finished career total) and never a fully
+    // completed past season either (projecting a season that's already over just
+    // reproduces the real final numbers with extra steps) — projectSeasonStats itself
+    // returns null when there's no real games-played data to scale from, so this safely
+    // no-ops for career mode or a player with no games this season.
+    const isCareerMode = season === 'career'
+    const hittingProjection = isCareerMode ? null : projectSeasonStats(hittingStats, 'hitting')
+    const pitchingProjection = isCareerMode ? null : projectSeasonStats(pitchingStats, 'pitching')
+
     res.json({
       player,
       hittingSeasonStats: hittingStats,
       pitchingSeasonStats: pitchingStats,
       fieldingSeasonStats: fieldingStatsFixed,
       jwinsComplete,
+      hittingProjection,
+      pitchingProjection,
     })
   } catch (err) {
     console.error('players/:id failed:', err.message)

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { cached } from '../cache.js'
 import * as mlb from '../mlbClient.js'
+import { projectTeamRecord } from '../projections.js'
 
 const router = Router()
 
@@ -40,6 +41,10 @@ router.get('/', async (req, res) => {
         gamesBack: teamRecord.gamesBack,
         runsScored: teamRecord.runsScored,
         runsAllowed: teamRecord.runsAllowed,
+        // Projected full-season win/loss pace — see projectTeamRecord in projections.js.
+        // null once the season is actually over (nothing left to project) or for a
+        // career-style query this route doesn't really support anyway.
+        projectedRecord: projectTeamRecord(teamRecord.wins, teamRecord.losses),
       })),
     }))
 
@@ -59,6 +64,7 @@ router.get('/', async (req, res) => {
           wildCardRank: teamRecord.wildCardRank,
           wildCardGamesBack: teamRecord.wildCardGamesBack,
           wildCardEliminationNumber: teamRecord.wildCardEliminationNumber,
+          projectedRecord: projectTeamRecord(teamRecord.wins, teamRecord.losses),
         }))
         .sort((a, b) => Number(a.wildCardRank) - Number(b.wildCardRank)),
     }))

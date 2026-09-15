@@ -18,6 +18,8 @@ const player = ref(null)
 const hittingStats = ref(null)
 const pitchingStats = ref(null)
 const fieldingStats = ref(null)
+const hittingProjection = ref(null)
+const pitchingProjection = ref(null)
 const gameLog = ref([])
 const yearByYear = ref([])
 const yearByYearLoading = ref(false)
@@ -25,6 +27,14 @@ const yearByYearError = ref('')
 const loading = ref(true)
 const errorMsg = ref('')
 const followed = useFollowedPlayersStore()
+
+// Projected stats scale a player's CURRENT counting stats to a 162-game pace — a simple,
+// transparent projection (same idea as broadcasts' "on pace for" numbers), not a
+// sophisticated model. Only meaningful for a season that's actually in progress right
+// now (never career, never a fully completed past season) — see projectSeasonStats on
+// the backend for exactly what this does and doesn't account for. Off by default so the
+// real, actual stats are what a first-time visitor sees.
+const showProjected = ref(false)
 
 // Position code '1' is a rough default guess, not a hard rule — two-way players (Ohtani)
 // and anyone who pitched before the DH rule (routinely batting even as a primary pitcher)
@@ -42,9 +52,22 @@ const selectedSeason = computed(() =>
   route.query.season ? String(route.query.season) : String(new Date().getFullYear()),
 )
 const isCareer = computed(() => selectedSeason.value === 'career')
+const isCurrentSeason = computed(() => !isCareer.value && Number(selectedSeason.value) === new Date().getFullYear())
 
 const activeGroup = computed(() => selectedGroup.value || defaultGroup.value)
+// Projections only exist for hitting/pitching (never fielding) and only for the current,
+// in-progress season — projectionForActiveGroup is null whenever projecting wouldn't make
+// sense, which the toggle UI uses to hide itself entirely rather than show a toggle that
+// does nothing.
+const projectionForActiveGroup = computed(() => {
+  if (activeGroup.value === 'pitching') return pitchingProjection.value
+  if (activeGroup.value === 'hitting') return hittingProjection.value
+  return null
+})
 const activeStats = computed(() => {
+  if (showProjected.value && projectionForActiveGroup.value) {
+    return projectionForActiveGroup.value.stat
+  }
   if (activeGroup.value === 'pitching') return pitchingStats.value
   if (activeGroup.value === 'fielding') return fieldingStats.value
   return hittingStats.value
@@ -85,6 +108,7 @@ function setSeasonMode(mode) {
   const query = { ...route.query }
   if (mode === 'career') {
     query.season = 'career'
+    showProjected.value = false // projections don't exist for career mode
   } else {
     delete query.season
   }
@@ -101,6 +125,8 @@ async function load() {
     hittingStats.value = data.hittingSeasonStats
     pitchingStats.value = data.pitchingSeasonStats
     fieldingStats.value = data.fieldingSeasonStats
+    hittingProjection.value = data.hittingProjection
+    pitchingProjection.value = data.pitchingProjection
 
     const group = activeGroup.value
 
@@ -257,10 +283,30 @@ function formatOpponent(opponent) {
           Career
         </label>
       </div>
+      <div v-if="projectionForActiveGroup">
+        <strong class="muted" style="font-size: 12px;">View:</strong>
+        <label class="checkbox-row" style="display: inline; margin-right: 10px;">
+          <input type="radio" value="actual" :checked="!showProjected" @change="showProjected = false" />
+          Actual
+        </label>
+        <label class="checkbox-row" style="display: inline;">
+          <input type="radio" value="projected" :checked="showProjected" @change="showProjected = true" />
+          Projected (162-game pace)
+        </label>
+      </div>
     </div>
 
+    <p v-if="showProjected && projectionForActiveGroup" class="muted" style="margin: 0 0 10px 0;">
+      Projected by scaling {{ projectionForActiveGroup.gamesPlayedSoFar }} games played so
+      far to a full 162-game season — a simple pace projection, not a sophisticated model.
+      <template v-if="projectionForActiveGroup.isLowSample">
+        <strong>Small sample warning:</strong> with only {{ projectionForActiveGroup.gamesPlayedSoFar }}
+        games played, this projection can swing wildly and shouldn't be treated as reliable.
+      </template>
+    </p>
+
     <div class="section">
-      <h2>{{ isCareer ? 'Career' : 'This season' }} At A Glance ({{ activeGroup }})</h2>
+      <h2>{{ isCareer ? 'Career' : 'This season' }} At A Glance ({{ activeGroup }}{{ showProjected && projectionForActiveGroup ? ', projected' : '' }})</h2>
       <p v-if="!activeStats" class="muted">
         No {{ activeGroup }} stats available for this timeframe.
         <template v-if="activeGroup !== 'hitting' && hasHitting">

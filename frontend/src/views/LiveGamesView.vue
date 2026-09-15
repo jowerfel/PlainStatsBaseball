@@ -123,18 +123,19 @@ onMounted(load)
           <th>Venue</th>
           <th>Start</th>
           <th>Pitchers</th>
+          <th>Matchup</th>
           <th>Count</th>
           <th>Latest</th>
-          <th>Status</th>
-          <th>Start</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="game in filteredGames" :key="game.gamePk">
           <td>
-            {{ game.teams?.away?.team?.name || 'Away' }}
-            @
-            {{ game.teams?.home?.team?.name || 'Home' }}
+            <RouterLink :to="`/live/${game.gamePk}`">
+              {{ game.teams?.away?.team?.name || 'Away' }}
+              @
+              {{ game.teams?.home?.team?.name || 'Home' }}
+            </RouterLink>
             <div class="muted" style="font-size: 11px;">{{ game.venueName || game.venue?.name || 'Unknown venue' }}</div>
           </td>
           <td>
@@ -156,11 +157,6 @@ onMounted(load)
           <td>{{ matchupText(game) }}</td>
           <td>{{ countText(game) }}</td>
           <td>{{ latestPlay(game) }}</td>
-          <td>{{ formatStartTime(game) }}</td>
-          <td>
-            {{ game.linescore.away.runs ?? '-' }}-{{ game.linescore.home.runs ?? '-' }}
-            {{ game.linescore.away.hits != null && game.linescore.home.hits != null ? `, ${game.linescore.away.hits}-${game.linescore.home.hits} H` : '' }}
-          </td>
         </tr>
       </tbody>
     </table>
