@@ -1,8 +1,9 @@
 # PlainStats
 
-Baseball stats in plain English. See the original build prompt in the project for full
-feature spec — this README covers what's actually built and what changed from that spec
-during implementation.
+Baseball stats in plain English. A Vue 3 + Express site (plainstats.jwerfel.com) built
+around the official MLB Stats API, with a deliberately flat, no-frills design — no
+gradients, shadows, or animation — and hover tooltips that explain every stat in plain
+language.
 
 ## Running it
 
@@ -11,77 +12,93 @@ cd backend && npm install && npm start      # http://localhost:3001
 cd frontend && npm install && npm run dev   # http://localhost:5173, proxies /api to backend
 ```
 
-## What's working end-to-end
+In production, the frontend is built (`npm run build` in `frontend/`) and the contents of
+`frontend/dist/` are copied into `backend/public/`. The same Express server then serves
+both the built frontend and the `/api/*` routes, run under PM2 behind Nginx.
 
-- Player search across MLB history (not just current active rosters), player rundown
-  (bio, season stats, year-by-year career table, game log)
-- Single-stat leaderboards for expanded hitting/pitching stats, sortable, including
-  all-time career leaderboards
-- Custom leaderboard builder with shareable URLs
-- Followed pitchers and hitters (localStorage)
-- Pitcher tracker with probable-starter lookup, fallback next-start estimate, and recent
-  starts from MLB game logs
-- Live games tab with score, status, probable pitchers, current matchup, count, linescore,
-  and venue/start-time details
-- Standings tab with division-by-division team records, win percentage, games back, streak,
-  last 10, and runs scored/allowed
-- Flat, Craigslist-style UI throughout, exactly per the original design spec
+## Architecture
 
-## Data notes
+- **Backend**: Node/Express (ES modules — `"type": "module"` in `package.json`, so use
+  `import`, not `require()`). Proxies and caches the official MLB Stats API
+  (`statsapi.mlb.com`); the frontend never calls MLB directly.
+- **Frontend**: Vue 3 (Composition API, `<script setup>`), Vue Router, Pinia, plain CSS
+  (no Tailwind or component library), built with Vite.
+- **Storage**: no database. Article metadata (likes/views) lives in flat JSON files under
+  `backend/db/`; articles themselves are markdown files in `backend/articles/`. The
+  browser-side state (follows, theme, a generated visitor ID) lives in `localStorage`, not
+  cookies — a deliberate choice, disclosed on the About page.
+- **Analytics**: Umami, via `data-umami-event` attributes on nav links and other key
+  actions throughout the frontend.
 
-- **Stat names** now stay as their real baseball abbreviations (`AVG`, `OBP`, `IP`,
-  `WAR`, etc.) while tooltips provide the full name, a short explanation, and one extra
-  reading note.
-- **WAR** is supported through the `season_stats` SQLite table because MLB's public Stats
-  API does not reliably provide one standard WAR field in normal season stat responses.
-  Populate `season_stats` from your chosen WAR source and the frontend will display it.
-- The `backend/etl/pull_statcast.py` script is real, logic-tested code (see
-  `backend/etl/README.md`), but has not been run against live Baseball Savant data — the
-  sandbox this was built in has that domain blocked at the network layer.
+### Where the math lives
 
-## Corrections made to the original build spec
+- `backend/derivedStats.js` and `backend/jwinsFormula.js` are the shared "math layer" —
+  any derived or custom stat is computed here, not duplicated in route files.
+- `backend/routes/players.js`, `leaderboards.js`, and `jwins.js` each call into those
+  shared functions rather than reimplementing stat logic themselves.
+- `frontend/src/data/statDictionary.js` is the single source of truth for a stat's display
+  name, formatting, and tooltip text — including custom stats like JWins, so they look
+  identical to real MLB stats everywhere they appear.
 
-Two things in the original spec didn't match the real MLB Stats API / Baseball Savant,
-caught by checking against the actual APIs and a widely-used community wrapper
-(toddrob99/MLB-StatsAPI) rather than assuming the spec's endpoint names were correct:
+## Features
 
-1. **There is no `/people/search?names=` endpoint on the MLB Stats API.** Player search
-   is implemented instead by pulling MLB's all-time career leaderboard data
-   (`/stats?stats=career`, hitting and pitching, no `season` param) and filtering the
-   merged player pool by name server-side, cached for 24 hours. This covers players from
-   any era, not just the current active roster — see the note in `backend/mlbClient.js`
-   and `backend/routes/players.js`.
-2. **Savant's raw CSV doesn't have `exit_velocity` or a boolean `barrel` column.** The real
-   columns are `launch_speed` and `launch_speed_angle` (a 1-6 zone where 6 = barrel). The
-   ETL script maps these correctly; the app-facing stat key (`exit_velocity`) is unchanged
-   so nothing in the frontend needed to change. See `backend/db/schema.sql`.
+- **Player pages** — hitting/pitching/fielding stats, season/career toggle, and a
+  projected-stats toggle.
+- **Compare players** — up to 4 players at once, any mix of hitting/pitching/fielding.
+- **Leaderboards** — separate Batting, Fielding, and Pitching pages sharing one composable
+  (`useLeaderboardBuilder.js`) so behavior stays consistent across all three.
+- **Standings** — full division standings plus a wild card race section, with a
+  projected-record toggle.
+- **Live games** — a live games list plus a full pitch-by-pitch/boxscore detail page per
+  game.
+- **Articles** — plain markdown files dropped into `backend/articles/`, parsed and
+  rendered server-side (no CMS or database). Each visitor gets a generated ID stored in
+  `localStorage`, allowing one like and one view per visitor per article (likes can be
+  undone).
+- **JWins** — a custom "Wins Above Replacement" stat family: JWinsB (batting), JWinsP
+  (pitching), JWinsF (fielding), and JWins Complete (the sum of whichever of those a
+  player has). All tunable weights live in one config object in `backend/jwinsFormula.js`.
+  Has its own `/jwins` page with Career Leaders, Single Season Leaders, and Best Single
+  Season Ever tabs, each with a Batting/Pitching/Fielding/Complete selector.
+- **Projected stats** — simple pace-based projections that scale current-season stats to
+  a full season. No aging curves or regression — just transparent pace scaling, and the
+  UI says so. Pitchers are scaled against a starter or reliever workload depending on
+  their role, not a hitter's 162-game pace.
 
-Also swapped the spec's suggested `coperyan/statcast-api` reference for `pybaseball`
-directly — the former is a thin, unmaintained 4-star wrapper that itself points to
-pybaseball as its own reference implementation.
+## Notes on MLB's data
 
-## Leaderboard notes
+- Innings pitched are reported like `"63.1"`, meaning 63 and *1/3* innings — not 63.1 as a
+  decimal. Anything that does math with innings pitched must convert through the
+  whole-thirds-aware helper (`inningsPitchedToDecimal`), not a plain `Number()` parse.
+- MLB's career+fielding leaderboard endpoint omits many players who haven't played
+  recently. Career fielding leaderboards are instead built by summing each player's
+  JWinsF across individual season leaderboards.
+- A fielding leaderboard split can return one row per position for a player who played
+  multiple positions in a season; these are grouped and summed by player before any
+  fielding stat is computed.
+- JWinsF excludes putouts entirely for first basemen and catchers, since a routine putout
+  at those positions mostly reflects "received a throw" rather than fielding skill — an
+  established issue in sabermetrics, not a novel finding. Catchers use caught-stealing,
+  double plays, and passed balls instead.
+- MLB's combined live-feed ("GUMBO") endpoint is meant for in-progress games and 404s for
+  many completed ones; anything that needs to work on historical games uses the dedicated
+  `/boxscore`, `/playByPlay`, and `/linescore` endpoints instead.
 
-The leaderboard pulls a large pool (3000 rows) from MLB's stats endpoint and sorts the
-*entire* pool server-side by whichever stat is active, rather than trusting MLB's own
-default sort order and only re-sorting a small top slice — a smaller pool size (300)
-previously caused real career leaders in specific stats (e.g. stolen bases) to be cut
-before the sort ever saw them, since the upstream default sort favors different stats.
-See `POOL_SIZE` in `backend/routes/leaderboards.js`.
+## Not currently wired up
 
-## Still open (from the original spec's own "open decisions" list)
-
-- Statcast backfill depth (current season vs. multi-year)
-- Final hosting for the persistent SQLite file + nightly cron
+- `backend/etl/` is a Statcast-pulling Python pipeline and `backend/db/schema.sql` is a
+  matching SQLite schema for it — neither is connected to the live Node server or read by
+  any route. Left in place intentionally for possible future use.
+- No server-side rendering — this is a client-rendered Vue SPA, which limits the SEO
+  impact of any meta-tag work.
+- Individual player pages aren't listed in `sitemap.xml` (there are too many to enumerate
+  statically).
 
 ## Troubleshooting
 
-- If the standings page returns "Not found" or the live tab never finishes loading, restart the backend server so the latest route code is active.
-- Test the backend directly at `http://localhost:3001/api/live` and `http://localhost:3001/api/standings`.
-- The backend now logs the mounted API routes on startup, so you can confirm the running process has `/api/standings` enabled.
-- `backend/package.json` has `"type": "module"`, so every `.js` file in `backend/` is an ES
-  module — use `import`, not `require()`, and `__dirname`/`__filename` aren't available
-  automatically (derive them from `import.meta.url` via `fileURLToPath`, as `index.js`
-  already does for serving `backend/public`). Using CommonJS syntax anywhere in `backend/`
-  will crash the server on startup with `ReferenceError: require is not defined in ES
-  module scope`.
+- Backend logs its mounted API routes on startup — check that output to confirm the
+  running process actually has the route you expect.
+- Test API routes directly, e.g. `http://localhost:3001/api/live` and
+  `http://localhost:3001/api/standings`.
+- If a page 404s only on a hard reload (not on in-app navigation), it's almost always the
+  Express static/SPA-fallback ordering in `backend/index.js` — see the comments there.

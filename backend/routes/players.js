@@ -184,8 +184,16 @@ router.get('/:id', async (req, res) => {
     // returns null when there's no real games-played data to scale from, so this safely
     // no-ops for career mode or a player with no games this season.
     const isCareerMode = season === 'career'
-    const hittingProjection = isCareerMode ? null : projectSeasonStats(hittingStats, 'hitting')
-    const pitchingProjection = isCareerMode ? null : projectSeasonStats(pitchingStats, 'pitching')
+    // projectSeasonStats is async — it looks up the player's team's ACTUAL games
+    // remaining this season (from standings) to scale both hitting and pitching
+    // projections against a realistic remaining schedule, instead of assuming a player
+    // always has a full 162-game (or 32-start) season ahead of them regardless of
+    // today's date — see projections.js.
+    const teamId = player.currentTeam?.id
+    const [hittingProjection, pitchingProjection] = await Promise.all([
+      isCareerMode ? null : projectSeasonStats(hittingStats, 'hitting', teamId, season),
+      isCareerMode ? null : projectSeasonStats(pitchingStats, 'pitching', teamId, season),
+    ])
 
     res.json({
       player,

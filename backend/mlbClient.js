@@ -111,6 +111,15 @@ export function getStandings(season, leagueId = '103,104', standingsTypes) {
   return mlbGet('/standings', params)
 }
 
+// Regular-season start/end dates for a given year — used to figure out how much of the
+// season has actually elapsed (see projections.js's date-aware pitcher pace fix). MLB's
+// own `/seasons` endpoint returns this per-season, rather than us hardcoding "the season
+// runs April to October," which drifts a few days every year and breaks entirely for the
+// lockout-shortened 2020/2022 calendars.
+export function getSeasonDates(season, sportId = 1) {
+  return mlbGet('/seasons', { season, sportId })
+}
+
 export function getSeasonLeaderboard({ season, group = 'hitting', sportId = 1, limit = 100, statType } = {}) {
   const params = {
     stats: season === 'career' ? 'career' : (statType || 'season'),

@@ -5,7 +5,9 @@
 // batting order/role changes) — just a straightforward, transparent pace-based scale-up,
 // which is honest about what it is and easy to explain in the UI ("projected: scaled to
 // a full season's pace") rather than presenting a black-box number.
-//
+
+import * as mlb from './mlbClient.js'
+
 // COUNTING stats (hits, home runs, strikeouts, innings pitched, etc.) get scaled by
 // (a realistic full-season TOTAL of the right kind of appearance / appearances so far).
 // RATE stats (batting average, ERA, WHIP, OPS, etc.) are NOT scaled — a .300 hitter's
@@ -21,14 +23,40 @@
 // 162 games this season. He can't — a starter tops out around 32-33 starts a year, a
 // reliever around 65-75 appearances. Scaling Jacob Misiorowski's strikeouts against 162
 // games instead of ~32 realistic starts is exactly what produced an absurd 1400-strikeout
-// projection. Pitchers are now scaled against FULL_SEASON_STARTS (starters) or
-// FULL_SEASON_RELIEF_APPEARANCES (relievers) instead, detected from whether the pitcher
-// has actually been starting games (see classifyPitcherRole below) — hitters still scale
-// against FULL_SEASON_GAMES (162), which is the correct denominator for them.
+// projection. Hitters still scale against FULL_SEASON_GAMES (162), which is the correct
+// denominator for them.
+//
+// PITCHERS ALSO NEED TO KNOW WHERE WE ARE IN THE SEASON — this is the fix for a second,
+// related bug: scaling a pitcher's starts-so-far against a FIXED assumed season total
+// (e.g. 32 starts) ignores the calendar entirely. A pitcher with 15 starts in a 32-start
+// season always projected to "32 total, 17 more to go" whether it was May or September,
+// because the math was purely (fixed total / starts so far) with no notion of how many
+// scheduled days were actually left to make more starts in. Real projection instead:
+// take the days actually remaining in the season and divide by a standard rotation
+// cadence (5 days for a starter) to get REMAINING starts directly — not a cadence
+// inferred from the pitcher's own year-to-date average (which drifts from a real 5-man
+// rotation due to IL stints, skipped starts, doubleheaders, etc. and was producing
+// wrong "days per start" figures even after we tried it). Days remaining ÷ 5 IS the
+// remaining-starts count; it isn't scaled by anything else. See computePitcherScaleFactor
+// below.
 
 const FULL_SEASON_GAMES = 162 // hitters — the real number of games in a season
+// Fallback full-season appearance ceilings — only used when real season boundary dates
+// can't be fetched (see estimateSeasonProgress's catch below) and the date-aware path has
+// to fall back to the old fixed-total method. Kept as a safety net, not the primary path.
 const FULL_SEASON_STARTS = 32 // a realistic full season of starts for a starting pitcher
 const FULL_SEASON_RELIEF_APPEARANCES = 65 // a realistic full season of appearances for a reliever
+// Standard rotation cadence: a starter goes every 5th day. This is a FIXED assumption
+// applied directly to days remaining (days remaining / 5 = remaining starts) — not a
+// cadence derived from the pitcher's own starts-so-far, since a real pitcher's
+// season-to-date average is skewed by IL time, spot starts, and skipped turns in a way
+// that doesn't reflect how often they'll actually take the ball the rest of the way.
+const DAYS_PER_START = 5
+// Relievers don't follow a rotation slot, so there's no single equivalent "standard
+// cadence" the way there is for a starter — this approximates how often a given reliever
+// tends to appear relative to his team's remaining games (a modest workhorse rate),
+// applied to games remaining rather than days remaining.
+const RELIEF_APPEARANCES_PER_TEAM_GAME = FULL_SEASON_RELIEF_APPEARANCES / FULL_SEASON_GAMES
 
 // Counting stats that make sense to scale by games-played pace. Deliberately NOT every
 // field on a stat object — rate stats and percentages are excluded (see COUNTING_FIELDS
@@ -94,27 +122,161 @@ const MAX_SCALE_FACTOR = 8
 const MIN_GAMES_FOR_CONFIDENT_PROJECTION = 20
 const MIN_PITCHER_APPEARANCES_FOR_CONFIDENT_PROJECTION = 8
 
-function computeHitterScaleFactor(gamesPlayed) {
+// Computes the pace scale factor for a HITTER using the player's TEAM's actual games
+// remaining this season (162 minus the team's real games played, from standings) — not
+// (162 / games played so far), which was the bug: that formula assumes the player has
+//162 total chances no matter how far into the season it is, so a hitter with 4 HR in 16
+// games got scaled by 162/16 ≈ 10x regardless of only 10 team games being left. Correct
+// version: full season total = games played so far + team's games remaining, and THAT is
+// what the player's counting stats get scaled against.
+async function computeHitterScaleFactor(gamesPlayed, teamId, season) {
   const games = Number(gamesPlayed) || 0
   if (games <= 0) return null
-  const raw = FULL_SEASON_GAMES / games
-  return Math.min(raw, MAX_SCALE_FACTOR)
+
+  const gamesRemaining = await getTeamGamesRemaining(teamId, season)
+  const fullSeasonGames = gamesRemaining !== null ? games + gamesRemaining : FULL_SEASON_GAMES
+  const raw = fullSeasonGames / games
+  return { scaleFactor: Math.min(raw, MAX_SCALE_FACTOR), fullSeasonGames }
 }
 
-// Computes the pace scale factor for a PITCHER against the RIGHT denominator for their
-// role — a starter's appearances-so-far against a realistic full season of STARTS
-// (~32), a reliever's against a realistic full season of relief APPEARANCES (~65). This
-// is the actual fix: previously both were scaled against 162 (a hitter's full season),
-// which is why a pitcher a few starts into the year could project to an impossible
-// strikeout total — the denominator was simply wrong for what a pitcher's role can
-// realistically produce in a season, capping alone couldn't fix a wrong denominator.
-function computePitcherScaleFactor(stat) {
+// How many games a player's TEAM has left this season — the real answer to "how many
+// more chances does this player have to add to his counting stats," used for hitters and
+// (combined with a rotation-slot constraint) for starting pitchers. Fetched from MLB's
+// standings data for the player's team, which reports actual wins+losses so far — far
+// more precise than approximating "games remaining" from a fraction of calendar days,
+// since off days and doubleheaders make calendar time a poor proxy for games played.
+// Returns null if the team can't be found or the season is over (nothing left to play).
+async function getTeamGamesRemaining(teamId, season) {
+  if (!teamId) return null
+  try {
+    const data = await mlb.getStandings(season)
+    for (const record of data.records || []) {
+      for (const teamRecord of record.teamRecords || []) {
+        if (teamRecord.team?.id === Number(teamId)) {
+          const wins = Number(teamRecord.wins || 0)
+          const losses = Number(teamRecord.losses || 0)
+          const gamesPlayed = wins + losses
+          if (gamesPlayed <= 0) return null
+          return Math.max(FULL_SEASON_GAMES - gamesPlayed, 0)
+        }
+      }
+    }
+    return null
+  } catch (err) {
+    console.error(`getTeamGamesRemaining(${teamId}, ${season}) failed:`, err.message)
+    return null
+  }
+}
+
+// How far through the season we are, in real days — fetched from MLB's own season
+// boundary dates so this works correctly no matter the year (lockout-shortened seasons,
+// schedule shifts, etc.) rather than hardcoding "the season runs April to October." Used
+// only as a fallback for pitchers when a team's actual games-remaining count isn't
+// available (see computePitcherScaleFactor), since team games-remaining is the more
+// precise number when we have it.
+// Returns null if the dates can't be determined (network issue, unexpected response
+// shape, or a season with no regularSeasonStartDate/EndDate) — callers fall back to the
+// old fixed-total method in that case rather than guessing at a date range.
+async function estimateSeasonProgress(season) {
+  try {
+    const data = await mlb.getSeasonDates(season)
+    const seasonInfo = data?.seasons?.[0]
+    const startDate = seasonInfo?.regularSeasonStartDate
+    const endDate = seasonInfo?.regularSeasonEndDate
+    if (!startDate || !endDate) return null
+
+    const start = new Date(`${startDate}T00:00:00Z`)
+    const end = new Date(`${endDate}T00:00:00Z`)
+    const today = new Date()
+    const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+    const totalDays = (end - start) / MS_PER_DAY
+    if (!Number.isFinite(totalDays) || totalDays <= 0) return null
+
+    // Clamp "today" into the season window — if the season hasn't started yet, or has
+    // already ended, treat elapsed/remaining as the boundary rather than a negative or
+    // over-100% figure.
+    const clampedToday = new Date(Math.min(Math.max(today, start), end))
+    const daysElapsed = Math.max((clampedToday - start) / MS_PER_DAY, 0)
+    const daysRemaining = Math.max(totalDays - daysElapsed, 0)
+
+    return { daysElapsed, daysRemaining, totalDays }
+  } catch (err) {
+    console.error(`estimateSeasonProgress(${season}) failed, falling back to fixed-total pitcher projection:`, err.message)
+    return null
+  }
+}
+
+// Computes the pace scale factor for a PITCHER.
+// STARTERS: days remaining in the season / 5 (a standard rotation cadence) = remaining
+// starts, directly. This is NOT derived from the pitcher's own days-elapsed/starts-so-far
+// average — early tries at that produced wrong cadences (a pitcher's year-to-date pace
+// drifts from a true 5-day rotation due to IL time, spot starts, and skipped turns), so a
+// pitcher with 15 starts and 10 days left in the season correctly projects to 2 more
+// starts (10/5), not a number derived from how his 15 starts happened to space out over
+// the season so far.
+// RELIEVERS: no fixed rotation slot to divide days by, so this uses the same
+// team-games-remaining figure as hitters (from getTeamGamesRemaining), scaled by a
+// fixed appearances-per-team-game rate — more precise than approximating games remaining
+// from calendar days, for the same reason it's more precise for hitters.
+//
+// Falls back to calendar days (estimateSeasonProgress) if the team's games-remaining
+// figure isn't available, and to the old fixed-full-season-total method
+// (FULL_SEASON_STARTS / FULL_SEASON_RELIEF_APPEARANCES) only if NEITHER real data source
+// can be fetched, so an API hiccup degrades gracefully rather than failing the whole
+// projection.
+async function computePitcherScaleFactor(stat, teamId, season) {
   const role = classifyPitcherRole(stat)
   const appearancesSoFar = role === 'starter' ? Number(stat.gamesStarted || 0) : Number(stat.gamesPlayed || 0)
   if (appearancesSoFar <= 0) return null
+
+  const [gamesRemaining, progress] = await Promise.all([
+    getTeamGamesRemaining(teamId, season),
+    estimateSeasonProgress(season),
+  ])
+
+  if (role === 'starter') {
+    // Starters need DAYS remaining (a rotation is a calendar cadence, not a
+    // games-played cadence), so this path always prefers estimateSeasonProgress.
+    if (progress) {
+      const remainingAppearances = progress.daysRemaining / DAYS_PER_START
+      const fullSeasonAppearances = appearancesSoFar + remainingAppearances
+      const raw = fullSeasonAppearances / appearancesSoFar
+      return {
+        scaleFactor: Math.min(raw, MAX_SCALE_FACTOR),
+        role, appearancesSoFar, fullSeasonAppearances, method: 'dateAware',
+      }
+    }
+  } else if (gamesRemaining !== null) {
+    // Relievers scale off the team's actual remaining games, which is the more precise
+    // figure when we have it.
+    const remainingAppearances = gamesRemaining * RELIEF_APPEARANCES_PER_TEAM_GAME
+    const fullSeasonAppearances = appearancesSoFar + remainingAppearances
+    const raw = fullSeasonAppearances / appearancesSoFar
+    return {
+      scaleFactor: Math.min(raw, MAX_SCALE_FACTOR),
+      role, appearancesSoFar, fullSeasonAppearances, method: 'teamGamesRemaining',
+    }
+  } else if (progress) {
+    const remainingAppearances = progress.daysRemaining * RELIEF_APPEARANCES_PER_TEAM_GAME
+    const fullSeasonAppearances = appearancesSoFar + remainingAppearances
+    const raw = fullSeasonAppearances / appearancesSoFar
+    return {
+      scaleFactor: Math.min(raw, MAX_SCALE_FACTOR),
+      role, appearancesSoFar, fullSeasonAppearances, method: 'dateAware',
+    }
+  }
+
+  // Fallback: neither real data source available — use the old fixed-total approach.
   const fullSeasonAppearances = role === 'starter' ? FULL_SEASON_STARTS : FULL_SEASON_RELIEF_APPEARANCES
   const raw = fullSeasonAppearances / appearancesSoFar
-  return { scaleFactor: Math.min(raw, MAX_SCALE_FACTOR), role, appearancesSoFar, fullSeasonAppearances }
+  return {
+    scaleFactor: Math.min(raw, MAX_SCALE_FACTOR),
+    role,
+    appearancesSoFar,
+    fullSeasonAppearances,
+    method: 'fixedTotalFallback',
+  }
 }
 
 function scaleFields(stat, fields, scaleFactor) {
@@ -170,21 +332,26 @@ function recomputePitchingRates(projected) {
 // `isLowSample` flags an early, small-sample projection so the frontend can show an
 // explicit "small sample, treat with caution" note rather than presenting an early hot
 // streak's full-season pace as if it were reliable.
-export function projectSeasonStats(stat, group) {
+//
+// `teamId` and `season` are used to look up the player's team's actual games remaining
+// this season (see getTeamGamesRemaining/estimateSeasonProgress) so both hitting and
+// pitching projections scale against a REALISTIC remaining schedule rather than assuming
+// a player always has a full 162-game (or 32-start) season ahead of them regardless of
+// today's date. This function is async because of those lookups; callers must await it.
+export async function projectSeasonStats(stat, group, teamId, season) {
   if (!stat) return null
 
   if (group === 'pitching') {
-    const scaling = computePitcherScaleFactor(stat)
+    const scaling = await computePitcherScaleFactor(stat, teamId, season)
     if (scaling === null) return null
-    const { scaleFactor, role, appearancesSoFar, fullSeasonAppearances } = scaling
+    const { scaleFactor, role, appearancesSoFar, fullSeasonAppearances, method } = scaling
 
     let projected = scaleFields(stat, PITCHING_COUNTING_FIELDS, scaleFactor)
-    // gamesPlayed/gamesStarted are capped at the SAME realistic full-season total used as
-    // the scaling denominator (32 starts, 65 relief appearances) — not 162, which is the
-    // exact wrong assumption (that a pitcher could appear in as many games as an everyday
-    // hitter) that caused the original bug.
-    const projectedAppearances = Math.min(Math.round(appearancesSoFar * scaleFactor), fullSeasonAppearances)
-    projected.gamesPlayed = role === 'starter' ? projectedAppearances : projectedAppearances
+    // gamesPlayed/gamesStarted are capped at the realistic full-season appearance total
+    // computed above — never at 162, which is the exact wrong assumption (that a pitcher
+    // could appear in as many games as an everyday hitter) that caused the original bug.
+    const projectedAppearances = Math.min(Math.round(appearancesSoFar * scaleFactor), Math.round(fullSeasonAppearances))
+    projected.gamesPlayed = projectedAppearances
     if (role === 'starter') projected.gamesStarted = projectedAppearances
 
     const projectedInnings = inningsPitchedToDecimal(stat.inningsPitched) * scaleFactor
@@ -197,15 +364,17 @@ export function projectSeasonStats(stat, group) {
       gamesPlayedSoFar: appearancesSoFar,
       scaleFactor,
       role, // 'starter' or 'reliever' — surfaced so the UI can label the projection basis
+      method, // 'dateAware' / 'teamGamesRemaining' (normal) or 'fixedTotalFallback' (both real data sources failed)
     }
   }
 
   const gamesPlayed = stat.gamesPlayed
-  const scaleFactor = computeHitterScaleFactor(gamesPlayed)
-  if (scaleFactor === null) return null
+  const hitterScaling = await computeHitterScaleFactor(gamesPlayed, teamId, season)
+  if (hitterScaling === null) return null
+  const { scaleFactor, fullSeasonGames } = hitterScaling
 
   let projected = scaleFields(stat, HITTING_COUNTING_FIELDS, scaleFactor)
-  projected.gamesPlayed = Math.min(Math.round(Number(gamesPlayed) * scaleFactor), FULL_SEASON_GAMES)
+  projected.gamesPlayed = Math.min(Math.round(Number(gamesPlayed) * scaleFactor), Math.round(fullSeasonGames))
   projected = recomputeHittingRates(projected)
 
   return {
