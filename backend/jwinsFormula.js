@@ -8,17 +8,43 @@
 
 
 export const JWINS_WEIGHTS = {
-  // JWinsB (batting): (1B*w + 2B*w + 3B*w + HR*w + SO*w + BB*w + SB*w + HBP*w) / divisor
+  // JWinsB (batting) — real sabermetric formula, not an arbitrary linear-weights sum.
+  // Pipeline: wOBA (Josh's supplied FanGraphs linear weights) -> wRAA (weighted runs
+  // above average, using league-average wOBA and the wOBA scale constant) -> wins
+  // (divide runs by runs-per-win). This is structurally the same pipeline real
+  // fWAR/bWAR use for the batting component, with two real simplifications, both
+  // called out here rather than hidden:
+  //   1. leagueWOBA/wOBAScale/runsPerWin below are fixed constants from recent modern
+  //      seasons, not fetched fresh per season the way FanGraphs recomputes them every
+  //      year from that year's actual league totals. Real values drift only slightly
+  //      year to year, so this is a reasonable approximation, not season-exact.
+  //   2. Real WAR then adds a positional adjustment, a replacement-level (not
+  //      average-level) baseline, and a park factor on top of wRAA. This still stops at
+  //      wRAA -> wins (batting runs above AVERAGE, not replacement) — see
+  //      replacementLevelRunsPerPA below for the adjustment that shifts it from
+  //      "above average" to "above replacement."
   batting: {
-    singles: 0.44,
-    doubles: 0.74,
-    triples: 1.04,
-    homeRuns: 1.6,
-    strikeOuts: -0, // set to 0 — a swinging/called strikeout no longer costs JWinsB
-    walks: 0.29,
-    stolenBases: 0.2,
-    hitByPitch: 0.31,
-    divisor: 10,
+    wobaWeights: {
+      uBB: 0.69, // unintentional walks — real BB minus IBB, since IBB is a pitcher/game-
+      // context decision more than a batting skill and FanGraphs's own wOBA excludes it
+      HBP: 0.722,
+      singles: 0.888,
+      doubles: 1.271,
+      triples: 1.616,
+      homeRuns: 2.101,
+    },
+    // Recent-era approximate MLB-wide constants (not fetched per-season — see the big
+    // comment above). leagueWOBA is the MLB-wide average wOBA; wOBAScale converts a
+    // wOBA-OBP gap into a runs-per-PA value; runsPerWin is the standard "how many extra
+    // runs equal one extra win" conversion sabermetrics has used for years.
+    leagueWOBA: 0.320,
+    wobaScale: 1.24,
+    runsPerWin: 10,
+    // Shifts wRAA (runs above AVERAGE) down to runs above REPLACEMENT — a replacement-
+    // level hitter is worth roughly this many fewer runs per PA than a league-average
+    // one. This is what actually makes JWinsB an "Above Replacement" stat rather than an
+    // "Above Average" one; real WAR uses a very similar per-PA replacement adjustment.
+    replacementLevelRunsPerPA: 0.02,
   },
 
   // JWinsP (pitching): (nonHRHitsAllowed*w + HRAllowed*w + SO*w + BB*w + IP*w) / divisor
@@ -82,30 +108,56 @@ export function inningsToDecimal(innings) {
   return whole + thirds / 3
 }
 
-// JWinsB — batting. `stat` is a merged hitting stat object (already has `singles` derived
-// onto it by the time this runs — see routes/players.js / routes/leaderboards.js).
+// JWinsB — batting, now a real wOBA-based Wins Above Replacement estimate rather than an
+// arbitrary linear-weights sum. `stat` is a merged hitting stat object (already has
+// `singles` derived onto it by the time this runs — see routes/players.js /
+// routes/leaderboards.js). Uses real MLB Stats API fields: atBats, baseOnBalls,
+// intentionalWalks, sacFlies, hitByPitch, singles/doubles/triples/homeRuns,
+// plateAppearances.
 export function computeJWinsBatting(stat) {
   const w = JWINS_WEIGHTS.batting
+
+  const atBats = Number(stat.atBats || 0)
+  const walks = Number(stat.baseOnBalls || 0)
+  const intentionalWalks = Number(stat.intentionalWalks || 0)
+  const unintentionalWalks = Math.max(walks - intentionalWalks, 0)
+  const sacFlies = Number(stat.sacFlies || 0)
+  const hitByPitch = Number(stat.hitByPitch || 0)
   const singles = Number(stat.singles || 0)
   const doubles = Number(stat.doubles || 0)
   const triples = Number(stat.triples || 0)
   const homeRuns = Number(stat.homeRuns || 0)
-  const strikeOuts = Number(stat.strikeOuts || 0)
-  const baseOnBalls = Number(stat.baseOnBalls || 0)
-  const stolenBases = Number(stat.stolenBases || 0)
-  const hitByPitch = Number(stat.hitByPitch || 0)
 
-  const raw =
-    singles * w.singles +
-    doubles * w.doubles +
-    triples * w.triples +
-    homeRuns * w.homeRuns +
-    strikeOuts * w.strikeOuts +
-    baseOnBalls * w.walks +
-    stolenBases * w.stolenBases +
-    hitByPitch * w.hitByPitch
+  // wOBA numerator/denominator, exactly as supplied:
+  // wOBA = (0.690*uBB + 0.722*HBP + 0.888*1B + 1.271*2B + 1.616*3B + 2.101*HR)
+  //        / (AB + BB - IBB + SF + HBP)
+  const numerator =
+    unintentionalWalks * w.wobaWeights.uBB +
+    hitByPitch * w.wobaWeights.HBP +
+    singles * w.wobaWeights.singles +
+    doubles * w.wobaWeights.doubles +
+    triples * w.wobaWeights.triples +
+    homeRuns * w.wobaWeights.homeRuns
 
-  return raw / w.divisor
+  const denominator = atBats + walks - intentionalWalks + sacFlies + hitByPitch
+  if (denominator <= 0) return null
+  const woba = numerator / denominator
+
+  // wRAA (weighted runs above average) = ((wOBA - leagueWOBA) / wOBAScale) * PA — the
+  // standard sabermetric conversion from a rate stat (wOBA) to a counting stat in runs.
+  // Falls back to AB+BB+HBP+SF (the wOBA denominator, a reasonable PA proxy) if
+  // plateAppearances isn't present on this stat object for some reason.
+  const plateAppearances = Number(stat.plateAppearances || 0) || denominator
+  const wraa = ((woba - w.leagueWOBA) / w.wobaScale) * plateAppearances
+
+  // Shift from runs above AVERAGE to runs above REPLACEMENT (see the big comment on
+  // JWINS_WEIGHTS.batting for why this fixed per-PA constant, rather than a fetched
+  // one, is used).
+  const replacementRuns = w.replacementLevelRunsPerPA * plateAppearances
+  const runsAboveReplacement = wraa + replacementRuns
+
+  // Runs -> wins, the standard ~10-runs-per-win conversion.
+  return runsAboveReplacement / w.runsPerWin
 }
 
 // JWinsP — pitching. `hits`/`homeRuns` on a pitching-split stat object are the pitcher's
