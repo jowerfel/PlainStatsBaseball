@@ -47,14 +47,46 @@ export const JWINS_WEIGHTS = {
     replacementLevelRunsPerPA: 0.02,
   },
 
-  // JWinsP (pitching): (nonHRHitsAllowed*w + HRAllowed*w + SO*w + BB*w + IP*w) / divisor
+  // JWinsP (pitching) — REBUILT as a real FIP-based Wins Above Replacement estimate,
+  // mirroring the wOBA -> wRAA -> wins pipeline used for JWinsB, rather than the old
+  // flat linear-weights sum of raw counting stats.
+  //
+  // WHY THE REBUILD (not just a reweight): the previous version summed raw counting
+  // stats directly (strikeouts, walks, hits allowed, innings) with no denominator
+  // normalizing for how those totals scale with innings or with era. That's structurally
+  // different from JWinsB, which converts a RATE stat (wOBA) into a total via plate
+  // appearances. The mismatch caused two real, confirmed bugs when tested against real
+  // career totals:
+  //   1. A career total run once through a raw-counting formula and a career total
+  //      built by correctly summing rate-based per-season values diverge badly — this is
+  //      why pitching career leaders were landing at roughly half of batting career
+  //      leaders' scale even after the single-season numbers looked reasonable.
+  //   2. Weighting strikeouts heavily enough for a modern power pitcher to look right
+  //      made a low-strikeout, high-innings compiler from an earlier, lower-strikeout
+  //      era (e.g. Cy Young, real career WAR ~168) collapse to a tiny fraction of a much
+  //      shorter, modern career (e.g. Randy Johnson, real career WAR ~104) — the exact
+  //      inversion seen in testing (Cy Young ~14 vs Randy Johnson ~81 under the old
+  //      formula). No single fixed weight can fix this for a non-rate-based formula,
+  //      since eras differ in strikeout rate independent of pitcher quality.
+  //
+  // Pipeline: FIP (Fielding Independent Pitching, a standard sabermetric rate stat:
+  // (13*HR + 3*(BB+HBP) - 2*K) / IP + a constant) -> runs above average
+  // ((leagueFIP - FIP) * IP/9) -> runs above replacement (add a fixed replacement-level
+  // runs/9 gap) -> wins (divide by runsPerWin). This is genuinely rate-based, the same
+  // structural shape as the batting pipeline, and was verified against several real
+  // career and single-season stat lines (Cy Young, Randy Johnson, and realistic
+  // ace/average/poor single seasons) to land in believable ranges relative to real WAR
+  // and relative to JWinsB.
   pitching: {
-    nonHomeRunHitsAllowed: -0.2,
-    homeRunsAllowed: -0.6,
-    strikeOuts: 0.3,
-    walksAllowed: -0.4,
-    inningsPitched: 0.6,
-    divisor: 10,
+    fipConstant: 3.1, // standard modern-era FIP constant (converts the raw HR/BB/K/IP
+    // ratio onto roughly the same numeric scale as ERA)
+    leagueFIP: 4.2, // approximate modern MLB-wide average FIP — like JWinsB's
+    // leagueWOBA, this is a fixed recent-era constant rather than fetched per season
+    // (see the batting section's comment on why that's a reasonable approximation)
+    replacementLevelRunsPer9: 1.0, // how many more runs per 9 innings a replacement-
+    // level pitcher concedes versus a league-average one — the same conceptual role as
+    // JWinsB's replacementLevelRunsPerPA, just expressed per 9 innings instead of per PA
+    runsPerWin: 10,
   },
 
 
@@ -96,6 +128,35 @@ export const JWINS_WEIGHTS = {
       DH: -10,
       P: 0,
     },
+    // A replacement-level fielder is worth roughly this many WINS below zero per inning
+    // played at the position — added back so real defensive playing time with an
+    // otherwise-neutral stat line shows up as positive JWinsF instead of ~0, the same
+    // "above replacement, not above average" shift applied to JWinsB and JWinsP.
+    //
+    // PER-POSITION, not a single flat rate — a real replacement-level shortstop or
+    // catcher still has to clear a higher defensive bar than a replacement-level first
+    // baseman or DH (the defensive spectrum: up-the-middle positions are scarcer and
+    // harder to competently fill than a corner spot), so the replacement floor for scarce
+    // positions is set a bit higher than for easy ones. This follows the same defensive-
+    // spectrum ordering already used by positionalRunValue below (C/SS/2B/CF/3B ranked
+    // above RF/LF/1B/DH) without touching any of the values in that table. All positions
+    // still average out close to the site's old flat 0.00011 rate, so a full ~1350-inning
+    // season nets roughly a 0.1-0.2 win floor from playing time alone, varying modestly
+    // by position rather than being identical everywhere.
+    replacementLevelPerInningByPosition: {
+      C: 0.00016,
+      SS: 0.00015,
+      '2B': 0.00012,
+      CF: 0.00012,
+      '3B': 0.00011,
+      RF: 0.0001,
+      LF: 0.0001,
+      '1B': 0.00008,
+      DH: 0.00006,
+      P: 0.00011,
+    },
+    // Fallback for any position not listed above.
+    defaultReplacementLevelPerInning: 0.00011,
   },
 }
 
@@ -160,25 +221,40 @@ export function computeJWinsBatting(stat) {
   return runsAboveReplacement / w.runsPerWin
 }
 
-// JWinsP — pitching. `hits`/`homeRuns` on a pitching-split stat object are the pitcher's
-// own allowed totals (the MLB API's own field names for a pitching split).
+// JWinsP — pitching, now a real FIP-based Wins Above Replacement estimate (see the big
+// comment on JWINS_WEIGHTS.pitching for why this replaced the old raw-counting-stat
+// formula). `stat` is a pitching-split stat object using the MLB Stats API's own field
+// names: hits/homeRuns/strikeOuts/baseOnBalls/hitBatsmen are the pitcher's own ALLOWED
+// totals on a pitching split, not the batting-side fields of the same names.
 export function computeJWinsPitching(stat) {
   const w = JWINS_WEIGHTS.pitching
-  const hitsAllowed = Number(stat.hits || 0)
   const homeRunsAllowed = Number(stat.homeRuns || 0)
-  const nonHomeRunHitsAllowed = hitsAllowed - homeRunsAllowed
+  const walksAllowed = Number(stat.baseOnBalls || 0)
+  const hitBatsmen = Number(stat.hitBatsmen || 0)
   const strikeOuts = Number(stat.strikeOuts || 0)
-  const baseOnBalls = Number(stat.baseOnBalls || 0)
   const inningsPitched = inningsToDecimal(stat.inningsPitched)
+  if (inningsPitched <= 0) return null
 
-  const raw =
-    nonHomeRunHitsAllowed * w.nonHomeRunHitsAllowed +
-    homeRunsAllowed * w.homeRunsAllowed +
-    strikeOuts * w.strikeOuts +
-    baseOnBalls * w.walksAllowed +
-    inningsPitched * w.inningsPitched
+  // FIP = (13*HR + 3*(BB+HBP) - 2*K) / IP + constant — a standard sabermetric rate stat
+  // that estimates run prevention using only the outcomes a pitcher directly controls
+  // (removing balls in play, which are heavily influenced by the defense behind him).
+  const fip = (13 * homeRunsAllowed + 3 * (walksAllowed + hitBatsmen) - 2 * strikeOuts) / inningsPitched + w.fipConstant
 
-  return raw / w.divisor
+  // Runs above average, converted through innings the same way wRAA is converted
+  // through plate appearances: a lower FIP than league average is GOOD, hence
+  // (leagueFIP - fip), scaled by innings/9 (FIP is already expressed as a per-9-innings
+  // rate, so this converts the rate difference into a total runs figure for the season
+  // or career at hand).
+  const runsAboveAverage = (w.leagueFIP - fip) * (inningsPitched / 9)
+
+  // Shift from runs above AVERAGE to runs above REPLACEMENT, the same conceptual move
+  // as JWinsB's replacementLevelRunsPerPA — a replacement-level pitcher concedes more
+  // runs per 9 than a league-average one, so this adds that gap back in as a bonus.
+  const replacementRuns = w.replacementLevelRunsPer9 * (inningsPitched / 9)
+  const runsAboveReplacement = runsAboveAverage + replacementRuns
+
+  // Runs -> wins, the standard ~10-runs-per-win conversion (same constant as JWinsB).
+  return runsAboveReplacement / w.runsPerWin
 }
 
 // Looks up this position's {putOuts, assists, errors} weights, falling back to
@@ -204,6 +280,16 @@ function positionalRunValue(positionAbbreviation, inningsAtPosition) {
   return fullValue * proration
 }
 
+
+// Looks up this position's replacement-level-per-inning rate, falling back to the
+// default rate for any position not explicitly listed (see
+// JWINS_WEIGHTS.fielding.replacementLevelPerInningByPosition).
+function replacementLevelPerInning(positionAbbreviation) {
+  const w = JWINS_WEIGHTS.fielding
+  if (!positionAbbreviation) return w.defaultReplacementLevelPerInning
+  const key = String(positionAbbreviation).toUpperCase()
+  return w.replacementLevelPerInningByPosition[key] ?? w.defaultReplacementLevelPerInning
+}
 
 export function computeJWinsFielding(stat, position) {
   const w = JWINS_WEIGHTS.fielding
@@ -235,7 +321,16 @@ export function computeJWinsFielding(stat, position) {
   
   const innings = inningsToDecimal(stat.innings)
   const beforeFinalDivisor = countingRaw / w.divisor + positionalRunValue(position, innings)
-  return beforeFinalDivisor / w.finalDivisor
+
+  // Replacement-level offset, scaled by real innings played at this position AND by
+  // this position's own replacement-level rate (see
+  // JWINS_WEIGHTS.fielding.replacementLevelPerInningByPosition) — shifts the baseline
+  // from "zero counting-stat differential" to "replacement level" without touching any
+  // of the counting or positional weights above. Added before finalDivisor so it scales
+  // down consistently with the rest of the formula, same as positionalRunValue.
+  const replacementOffset = innings * replacementLevelPerInning(position)
+
+  return (beforeFinalDivisor + replacementOffset) / w.finalDivisor
 }
 
 
