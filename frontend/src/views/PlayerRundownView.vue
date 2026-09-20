@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getPlayer, getPlayerGameLog, getPlayerYearByYear } from '@/services/mlbApi.js'
 import { getStatsByGroup } from '@/data/statDictionary.js'
 import { useFollowedPlayersStore } from '@/store/followedPlayers.js'
+import { setSeoMeta } from '@/composables/useSeoMeta.js'
 import StatBadge from '@/components/StatBadge.vue'
 import StatTooltip from '@/components/StatTooltip.vue'
 import StatTable from '@/components/StatTable.vue'
@@ -127,6 +128,22 @@ async function load() {
     fieldingStats.value = data.fieldingSeasonStats
     hittingProjection.value = data.hittingProjection
     pitchingProjection.value = data.pitchingProjection
+
+    // SEO: overrides the router's generic "Player - PlainStats" title/description (set
+    // before this data was available) with the player's actual name, team, and
+    // position — this is the whole point of the fix: a search for a player's name
+    // should be able to match a page whose <title> and meta description actually
+    // contain that name, not the word "Player." See useSeoMeta.js for why this matters
+    // for a client-rendered SPA with no server-side rendering.
+    if (player.value?.fullName) {
+      const teamPart = player.value.currentTeam?.name ? ` of the ${player.value.currentTeam.name}` : ''
+      const positionPart = player.value.primaryPosition?.name ? `, ${player.value.primaryPosition.name}` : ''
+      setSeoMeta({
+        title: `${player.value.fullName} Stats - PlainStats`,
+        description: `${player.value.fullName}${teamPart}${positionPart} — hitting, pitching, and fielding stats explained in plain English, including season, career, and projected stats.`,
+        canonicalPath: `/players/${props.playerId}`,
+      })
+    }
 
     const group = activeGroup.value
 

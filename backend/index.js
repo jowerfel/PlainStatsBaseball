@@ -11,6 +11,7 @@ import liveRouter from './routes/live.js'
 import standingsRouter from './routes/standings.js'
 import articlesRouter from './routes/articles.js'
 import jwinsRouter from './routes/jwins.js'
+import { sitemapHandler } from './routes/sitemap.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -56,6 +57,18 @@ console.log('Mounted API routes: /api/players, /api/leaderboard, /api/pitchers, 
 // An unmatched /api/* request is a real 404 — no such endpoint exists, so say so plainly.
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' })
+})
+
+// SEO: /sitemap.xml lists every static page and every player page so search engines can
+// discover player pages directly (there are far too many to link from anywhere on the
+// site itself) — see routes/sitemap.js for how the player list is built. /robots.txt
+// points crawlers at it and confirms nothing on the site is disallowed. Both are served
+// at the site root, not under /api, since that's where search engines and crawlers
+// expect to find them by convention.
+app.get('/sitemap.xml', sitemapHandler)
+app.get('/robots.txt', (req, res) => {
+  res.set('Content-Type', 'text/plain')
+  res.send('User-agent: *\nAllow: /\n\nSitemap: https://plainstats.jwerfel.com/sitemap.xml\n')
 })
 
 // SPA fallback: this Express server is what actually serves the built frontend (see
